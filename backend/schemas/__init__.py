@@ -4,6 +4,7 @@ from schemas.user import (
     UserUpdate,
     UserResponse,
     PasswordChange,
+    LoginRequest,
     Token,
     TokenData,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "UserUpdate",
     "UserResponse",
     "PasswordChange",
+    "LoginRequest",
     "Token",
     "TokenData",
 ]

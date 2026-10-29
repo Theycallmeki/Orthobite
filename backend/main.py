@@ -5,7 +5,9 @@ from fastapi.staticfiles import StaticFiles
 
 from config.settings import settings
 from config.database import Base, engine
+import models.users  # Ensure User model is loaded for table creation
 from middleware import setup_middleware
+from routes.user import router as user_router
 
 logger = logging.getLogger("orthobite")
 
@@ -17,11 +19,11 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# Database tables creation
+# Database table creation
 # ---------------------------------------------------------------------------
 try:
     Base.metadata.create_all(bind=engine)
-    logger.info("Database tables verified/created successfully.")
+    logger.info("Database tables initialized successfully.")
 except Exception as e:
     logger.warning(f"Database initialization warning: {e}")
 
@@ -31,12 +33,11 @@ except Exception as e:
 setup_middleware(app)
 
 # ---------------------------------------------------------------------------
-# Static files — serve uploaded scans and files at /uploads/...
+# Static files — serve uploads at /uploads/...
 # ---------------------------------------------------------------------------
 upload_dirs = [
     os.path.join(settings.UPLOAD_DIR, "scans"),
     os.path.join(settings.UPLOAD_DIR, "profiles"),
-    os.path.join(settings.UPLOAD_DIR, "documents"),
 ]
 for folder in upload_dirs:
     os.makedirs(folder, exist_ok=True)
@@ -44,7 +45,7 @@ for folder in upload_dirs:
 app.mount(f"/{settings.UPLOAD_DIR}", StaticFiles(directory=settings.UPLOAD_DIR), name=settings.UPLOAD_DIR)
 
 # ---------------------------------------------------------------------------
-# Core / Health Routes
+# Health / Root Endpoints
 # ---------------------------------------------------------------------------
 @app.get("/", tags=["Health"])
 def root():
@@ -64,14 +65,6 @@ def health():
     }
 
 # ---------------------------------------------------------------------------
-# Routers (to be plugged in as modules are created in subsequent phases)
+# Routers
 # ---------------------------------------------------------------------------
-# from routes.auth import router as auth_router
-# from routes.user import router as user_router
-# from routes.patient import router as patient_router
-# from routes.scan import router as scan_router
-#
-# app.include_router(auth_router)
-# app.include_router(user_router)
-# app.include_router(patient_router)
-# app.include_router(scan_router)
+app.include_router(user_router)
