@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+pydantic[email]
+pydantic-settings
+python-dotenv
+python-multipart
+passlib[bcrypt]
+bcrypt==4.0.1
+python-jose[cryptography]
+pillow
+aiofiles
+psycopg[binary]
+fastapi-mail
+aiosmtplib
