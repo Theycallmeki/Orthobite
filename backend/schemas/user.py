@@ -28,6 +28,11 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
 class UserResponse(BaseModel):
     id: int
     full_name: str
