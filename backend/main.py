@@ -38,8 +38,11 @@ setup_middleware(app)
 # Static files — serve uploads at /uploads/...
 # ---------------------------------------------------------------------------
 upload_dirs = [
-    os.path.join(settings.UPLOAD_DIR, "scans"),
-    os.path.join(settings.UPLOAD_DIR, "profiles"),
+    settings.TOOTH_CHART_DIR,
+    settings.SIGNATURES_DIR,
+    settings.DOCTORS_DIR,
+    settings.SCANS_DIR,
+    settings.PROFILES_DIR,
 ]
 for folder in upload_dirs:
     os.makedirs(folder, exist_ok=True)

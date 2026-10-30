@@ -12,5 +12,8 @@ python-jose[cryptography]
 pillow
 aiofiles
 psycopg[binary]
+apscheduler
+requests
+redis
 fastapi-mail
 aiosmtplib
