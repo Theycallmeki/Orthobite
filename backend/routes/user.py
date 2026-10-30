@@ -1,15 +1,20 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+import controllers.auth as auth_controller
 import controllers.user as user_controller
 from config.database import get_db
-from dependencies import get_current_user, require_staff
-from models.users import User
-from schemas.user import (
+from dependencies import get_current_user, require_admin, require_staff
+from models.users import User, UserRole
+from schemas.auth import (
     LoginRequest,
-    PasswordChange,
+    RegisterRequest,
+    StaffCreateRequest,
     Token,
-    UserCreate,
+)
+from schemas.user import (
+    PasswordChange,
     UserResponse,
     UserUpdate,
 )
@@ -18,32 +23,29 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 
 # ---------------------------------------------------------------------------
-# Auth / Registration
+# Backwards-compatible Auth Aliases (/users/register & /users/login)
 # ---------------------------------------------------------------------------
 
 @router.post(
     "/register",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new user",
+    summary="Register a new patient account (alias)",
 )
-def register(data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account (patient, staff, secretary, or orthodontist)."""
-    return user_controller.register_user(db, data)
+def register_alias(data: RegisterRequest, db: Session = Depends(get_db)):
+    """Self-registration alias for patient accounts."""
+    return auth_controller.register_patient(db, data)
 
 
 @router.post(
     "/login",
     response_model=Token,
-    summary="Authenticate user and return JWT access token",
+    summary="Login user (alias)",
 )
-def login(data: LoginRequest, db: Session = Depends(get_db)):
-    """Authenticate with email & password, returning a Bearer access token."""
-    user = user_controller.authenticate_user(db, data.email, data.password)
-    access_token = user_controller.create_access_token(
-        data={"sub": str(user.id), "role": user.role.value}
-    )
-    return Token(access_token=access_token, token_type="bearer")
+def login_alias(data: LoginRequest, db: Session = Depends(get_db)):
+    """Login alias accepting username or email."""
+    user = auth_controller.authenticate_user(db, data.identifier, data.password)
+    return auth_controller.build_token_response(user)
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +72,7 @@ def update_me(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update full name, phone number, or email for the authenticated user."""
+    """Update full name, phone number, username, or avatar for the authenticated user."""
     return user_controller.update_me(db, current_user, data)
 
 
@@ -91,19 +93,35 @@ def change_password(
 # Staff / Administrative Endpoints
 # ---------------------------------------------------------------------------
 
+@router.post(
+    "/staff",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create staff account (Admin only)",
+)
+def create_staff(
+    data: StaffCreateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Admin-only endpoint to register Doctor or Secretary accounts."""
+    return auth_controller.create_staff_user(db, data)
+
+
 @router.get(
     "/",
     response_model=list[UserResponse],
-    summary="List users (Staff only: Admin, Orthodontist, Secretary)",
+    summary="List users (Staff only: Admin, Doctor, Secretary)",
 )
 def list_users(
     skip: int = 0,
     limit: int = 100,
+    role: Optional[UserRole] = None,
     db: Session = Depends(get_db),
     _: User = Depends(require_staff),
 ):
-    """Paginated list of active users."""
-    return user_controller.list_users(db, skip=skip, limit=limit)
+    """Paginated list of active users, with optional role filtering."""
+    return user_controller.list_users(db, skip=skip, limit=limit, role=role)
 
 
 @router.get(

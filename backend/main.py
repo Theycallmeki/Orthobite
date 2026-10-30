@@ -8,6 +8,7 @@ from config.database import Base, engine
 import models.users    # Ensure User model is registered
 import models.patient  # Ensure Patient model is registered
 from middleware import setup_middleware
+from routes.auth import router as auth_router
 from routes.user import router as user_router
 from routes.patient import router as patient_router
 
@@ -72,5 +73,6 @@ def health():
 # ---------------------------------------------------------------------------
 # Routers
 # ---------------------------------------------------------------------------
+app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(patient_router)

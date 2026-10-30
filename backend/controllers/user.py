@@ -1,50 +1,17 @@
-from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
-from passlib.context import CryptContext
-from jose import jwt
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from config.settings import settings
-from models.users import User
+from controllers.auth import hash_password, verify_password
+from models.users import User, UserRole
 from schemas.user import (
     PasswordChange,
-    UserCreate,
     UserResponse,
     UserUpdate,
 )
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-# ---------------------------------------------------------------------------
-# Password & Token Helpers
-# ---------------------------------------------------------------------------
-
-def hash_password(password: str) -> str:
-    """Hash a plaintext password using bcrypt."""
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plaintext password against its bcrypt hash."""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Generate a signed JWT access token."""
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
-
-# ---------------------------------------------------------------------------
-# Internal Helpers
-# ---------------------------------------------------------------------------
 
 def get_user_or_404(db: Session, user_id: int) -> User:
     """Fetch an active user or raise a 404 exception."""
@@ -53,50 +20,6 @@ def get_user_or_404(db: Session, user_id: int) -> User:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found.",
-        )
-    return user
-
-
-# ---------------------------------------------------------------------------
-# Business Logic / Controller Methods
-# ---------------------------------------------------------------------------
-
-def register_user(db: Session, data: UserCreate) -> UserResponse:
-    """Create a new user. Raises 400 if the email is already registered."""
-    existing_user = db.query(User).filter(User.email == data.email).first()
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email address already exists.",
-        )
-
-    user = User(
-        full_name=data.full_name,
-        email=data.email,
-        phone=data.phone,
-        hashed_password=hash_password(data.password),
-        role=data.role,
-        is_active=True,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return UserResponse.model_validate(user)
-
-
-def authenticate_user(db: Session, email: str, password: str) -> User:
-    """Authenticate credentials. Raises 401 if invalid."""
-    user = db.query(User).filter(User.email == email).first()
-    if not user or not verify_password(password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive.",
         )
     return user
 
@@ -112,9 +35,17 @@ def get_user_by_id(db: Session, user_id: int) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
-def list_users(db: Session, skip: int = 0, limit: int = 100) -> list[UserResponse]:
-    """Return active users list with pagination."""
-    users = db.query(User).filter(User.is_active == True).offset(skip).limit(limit).all()
+def list_users(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    role: Optional[UserRole] = None,
+) -> list[UserResponse]:
+    """Return active users list with pagination and optional role filtering."""
+    query = db.query(User).filter(User.is_active == True)
+    if role:
+        query = query.filter(User.role == role)
+    users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
     return [UserResponse.model_validate(u) for u in users]
 
 
@@ -124,8 +55,21 @@ def update_me(db: Session, current_user: User, data: UserUpdate) -> UserResponse
         current_user.full_name = data.full_name
     if data.phone is not None:
         current_user.phone = data.phone
+    if data.avatar_url is not None:
+        current_user.avatar_url = data.avatar_url
+
+    # Check username uniqueness if changed
+    if data.username is not None and data.username != current_user.username:
+        exists = db.query(User).filter(User.username == data.username).first()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username is already taken by another account.",
+            )
+        current_user.username = data.username
+
+    # Check email uniqueness if changed
     if data.email is not None and data.email != current_user.email:
-        # Check duplicate
         exists = db.query(User).filter(User.email == data.email).first()
         if exists:
             raise HTTPException(
