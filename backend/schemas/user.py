@@ -6,6 +6,7 @@ from models.users import UserRole
 
 class UserBase(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=255)
+    username: str = Field(..., min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_-]+$")
     email: EmailStr
     phone: Optional[str] = None
     role: UserRole = UserRole.PATIENT
@@ -17,8 +18,10 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    username: Optional[str] = Field(None, min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_-]+$")
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
+    avatar_url: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
 
@@ -28,29 +31,16 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=6)
 
 
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
 class UserResponse(BaseModel):
     id: int
+    username: str
     full_name: str
     email: EmailStr
     phone: Optional[str] = None
     role: UserRole
+    avatar_url: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class TokenData(BaseModel):
-    user_id: Optional[int] = None
-    role: Optional[str] = None

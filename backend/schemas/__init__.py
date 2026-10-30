@@ -1,12 +1,17 @@
+from schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    StaffCreateRequest,
+    Token,
+    RefreshTokenRequest,
+    TokenPayload,
+)
 from schemas.user import (
     UserBase,
     UserCreate,
     UserUpdate,
     UserResponse,
     PasswordChange,
-    LoginRequest,
-    Token,
-    TokenData,
 )
 from schemas.patient import (
     PatientBase,
@@ -16,14 +21,17 @@ from schemas.patient import (
 )
 
 __all__ = [
+    "LoginRequest",
+    "RegisterRequest",
+    "StaffCreateRequest",
+    "Token",
+    "RefreshTokenRequest",
+    "TokenPayload",
     "UserBase",
     "UserCreate",
     "UserUpdate",
     "UserResponse",
     "PasswordChange",
-    "LoginRequest",
-    "Token",
-    "TokenData",
     "PatientBase",
     "PatientCreate",
     "PatientUpdate",
