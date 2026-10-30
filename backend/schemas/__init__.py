@@ -19,6 +19,20 @@ from schemas.patient import (
     PatientUpdate,
     PatientResponse,
 )
+from schemas.doctor import (
+    DoctorProfileBase,
+    DoctorProfileCreate,
+    DoctorProfileUpdate,
+    DoctorPublicResponse,
+    AvailabilityRuleItem,
+    SetAvailabilityRulesRequest,
+    AvailabilityRuleResponse,
+    TimeOffCreate,
+    TimeOffResponse,
+    TimeSlot,
+    DayAvailability,
+    DoctorAvailabilityResponse,
+)
 
 __all__ = [
     "LoginRequest",
@@ -36,4 +50,16 @@ __all__ = [
     "PatientCreate",
     "PatientUpdate",
     "PatientResponse",
+    "DoctorProfileBase",
+    "DoctorProfileCreate",
+    "DoctorProfileUpdate",
+    "DoctorPublicResponse",
+    "AvailabilityRuleItem",
+    "SetAvailabilityRulesRequest",
+    "AvailabilityRuleResponse",
+    "TimeOffCreate",
+    "TimeOffResponse",
+    "TimeSlot",
+    "DayAvailability",
+    "DoctorAvailabilityResponse",
 ]
