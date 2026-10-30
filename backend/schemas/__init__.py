@@ -8,6 +8,12 @@ from schemas.user import (
     Token,
     TokenData,
 )
+from schemas.patient import (
+    PatientBase,
+    PatientCreate,
+    PatientUpdate,
+    PatientResponse,
+)
 
 __all__ = [
     "UserBase",
@@ -18,4 +24,8 @@ __all__ = [
     "LoginRequest",
     "Token",
     "TokenData",
+    "PatientBase",
+    "PatientCreate",
+    "PatientUpdate",
+    "PatientResponse",
 ]
