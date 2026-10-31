@@ -1,5 +1,6 @@
 import os
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -9,22 +10,42 @@ import models.users    # Ensure User model is registered
 import models.patient  # Ensure Patient model is registered
 import models.doctor   # Ensure Doctor models are registered
 import models.appointment  # Ensure Appointment model is registered
+import models.notification  # Ensure NotificationLog model is registered
 from middleware import setup_middleware
 from routes.auth import router as auth_router
 from routes.user import router as user_router
 from routes.patient import router as patient_router
 from routes.doctor import router as doctor_router
 from routes.appointment import router as appointment_router
+from routes.notification import router as notification_router
+from services.scheduler import start_scheduler, shutdown_scheduler
 
 
 logger = logging.getLogger("orthobite")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager starting and stopping the APScheduler reminder daemon."""
+    try:
+        start_scheduler()
+    except Exception as e:
+        logger.warning(f"Could not start background scheduler: {e}")
+    yield
+    try:
+        shutdown_scheduler()
+    except Exception as e:
+        logger.warning(f"Could not shut down background scheduler: {e}")
+
 
 # Initialize FastAPI application
 app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
     description="Backend API for the OrthoBite Orthodontics and Bite Alignment Platform.",
+    lifespan=lifespan,
 )
+
 
 # ---------------------------------------------------------------------------
 # Database table creation
@@ -83,4 +104,6 @@ app.include_router(user_router)
 app.include_router(patient_router)
 app.include_router(doctor_router)
 app.include_router(appointment_router)
+app.include_router(notification_router)
+
 
