@@ -33,6 +33,18 @@ from schemas.doctor import (
     DayAvailability,
     DoctorAvailabilityResponse,
 )
+from schemas.appointment import (
+    AppointmentStatus,
+    AppointmentDoctorSummary,
+    AppointmentPatientSummary,
+    AppointmentCreate,
+    AppointmentAdminCreate,
+    AppointmentUpdate,
+    AppointmentStatusUpdate,
+    AppointmentResponse,
+    DailyScheduleResponse,
+    AppointmentListResponse,
+)
 
 __all__ = [
     "LoginRequest",
@@ -62,4 +74,15 @@ __all__ = [
     "TimeSlot",
     "DayAvailability",
     "DoctorAvailabilityResponse",
+    "AppointmentStatus",
+    "AppointmentDoctorSummary",
+    "AppointmentPatientSummary",
+    "AppointmentCreate",
+    "AppointmentAdminCreate",
+    "AppointmentUpdate",
+    "AppointmentStatusUpdate",
+    "AppointmentResponse",
+    "DailyScheduleResponse",
+    "AppointmentListResponse",
 ]
+
