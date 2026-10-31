@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
@@ -5,6 +6,9 @@ from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger("orthobite.appointment")
+
 
 from models.appointment import Appointment, AppointmentStatus
 from models.doctor import AvailabilityRule, DoctorProfile, TimeOff
@@ -283,7 +287,15 @@ def book_appointment(
     db.commit()
     db.refresh(appointment)
 
+    # Dispatch Brevo Booking Confirmation
+    try:
+        from services.scheduler import dispatch_booking_confirmation
+        dispatch_booking_confirmation(db, appointment.id)
+    except Exception as e:
+        logger.warning(f"Could not dispatch booking confirmation for appointment {appointment.id}: {e}")
+
     return to_appointment_response(appointment)
+
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +477,17 @@ def update_appointment_status(
 
     db.commit()
     db.refresh(appt)
+
+    # Dispatch Brevo Cancellation Notice
+    if data.status == AppointmentStatus.CANCELLED:
+        try:
+            from services.scheduler import dispatch_cancellation_notice
+            dispatch_cancellation_notice(db, appt.id, appt.cancellation_reason)
+        except Exception as e:
+            logger.warning(f"Could not dispatch cancellation notice for appointment {appt.id}: {e}")
+
     return to_appointment_response(appt)
+
 
 
 # ---------------------------------------------------------------------------
