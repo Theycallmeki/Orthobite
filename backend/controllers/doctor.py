@@ -6,7 +6,9 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.doctor import AvailabilityRule, DoctorProfile, TimeOff
+from models.appointment import Appointment, AppointmentStatus
 from models.users import User, UserRole
+
 from schemas.doctor import (
     AvailabilityRuleItem,
     AvailabilityRuleResponse,
@@ -273,6 +275,18 @@ def generate_doctor_availability(
         .all()
     )
 
+    # Fetch active booked appointments covering this month
+    booked_appointments = (
+        db.query(Appointment)
+        .filter(
+            Appointment.doctor_id == doctor_id,
+            Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]),
+            Appointment.start_time <= month_end,
+            Appointment.end_time >= month_start,
+        )
+        .all()
+    )
+
     days_result = []
 
     for day_num in range(1, num_days + 1):
@@ -304,6 +318,15 @@ def generate_doctor_availability(
                         to_start = to.start_datetime.replace(tzinfo=None) if to.start_datetime.tzinfo else to.start_datetime
                         to_end = to.end_datetime.replace(tzinfo=None) if to.end_datetime.tzinfo else to.end_datetime
                         if slot_start < to_end and slot_end > to_start:
+                            is_available = False
+                            break
+
+                # Check overlap with any booked appointment
+                if is_available:
+                    for appt in booked_appointments:
+                        appt_start = appt.start_time.replace(tzinfo=None) if appt.start_time.tzinfo else appt.start_time
+                        appt_end = appt.end_time.replace(tzinfo=None) if appt.end_time.tzinfo else appt.end_time
+                        if slot_start < appt_end and slot_end > appt_start:
                             is_available = False
                             break
 
