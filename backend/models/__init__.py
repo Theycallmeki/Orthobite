@@ -3,6 +3,7 @@ from models.patient import Patient, TreatmentStage, BiteType
 from models.doctor import DoctorProfile, AvailabilityRule, TimeOff
 from models.appointment import Appointment, AppointmentStatus
 from models.notification import NotificationLog, NotificationType, NotificationStatus
+from models.record import TreatmentRecord, Payment, PaymentMethod
 
 __all__ = [
     "User",
@@ -18,6 +19,9 @@ __all__ = [
     "NotificationLog",
     "NotificationType",
     "NotificationStatus",
+    "TreatmentRecord",
+    "Payment",
+    "PaymentMethod",
 ]
 
 
