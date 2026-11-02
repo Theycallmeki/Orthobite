@@ -3,6 +3,7 @@ import controllers.user as user_controller
 import controllers.patient as patient_controller
 import controllers.doctor as doctor_controller
 import controllers.appointment as appointment_controller
+import controllers.record as record_controller
 
 __all__ = [
     "auth_controller",
@@ -10,5 +11,6 @@ __all__ = [
     "patient_controller",
     "doctor_controller",
     "appointment_controller",
+    "record_controller",
 ]
 

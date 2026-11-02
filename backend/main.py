@@ -11,6 +11,7 @@ import models.patient  # Ensure Patient model is registered
 import models.doctor   # Ensure Doctor models are registered
 import models.appointment  # Ensure Appointment model is registered
 import models.notification  # Ensure NotificationLog model is registered
+import models.record  # Ensure TreatmentRecord & Payment models are registered
 from middleware import setup_middleware
 from routes.auth import router as auth_router
 from routes.user import router as user_router
@@ -18,6 +19,7 @@ from routes.patient import router as patient_router
 from routes.doctor import router as doctor_router
 from routes.appointment import router as appointment_router
 from routes.notification import router as notification_router
+from routes.record import router as record_router
 from services.scheduler import start_scheduler, shutdown_scheduler
 
 
@@ -105,5 +107,6 @@ app.include_router(patient_router)
 app.include_router(doctor_router)
 app.include_router(appointment_router)
 app.include_router(notification_router)
+app.include_router(record_router)
 
 
