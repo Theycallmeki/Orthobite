@@ -14,6 +14,7 @@ from services.scheduler import (
     dispatch_booking_confirmation,
     dispatch_cancellation_notice,
 )
+from services.websocket import ConnectionManager, manager
 
 __all__ = [
     "BrevoEmailService",
@@ -28,4 +29,6 @@ __all__ = [
     "scan_and_send_reminders",
     "dispatch_booking_confirmation",
     "dispatch_cancellation_notice",
+    "ConnectionManager",
+    "manager",
 ]
