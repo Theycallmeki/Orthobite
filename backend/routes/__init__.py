@@ -4,6 +4,7 @@ from routes.patient import router as patient_router
 from routes.doctor import router as doctor_router
 from routes.appointment import router as appointment_router
 from routes.notification import router as notification_router
+from routes.record import router as record_router
 
 __all__ = [
     "auth_router",
@@ -12,6 +13,7 @@ __all__ = [
     "doctor_router",
     "appointment_router",
     "notification_router",
+    "record_router",
 ]
 
 
