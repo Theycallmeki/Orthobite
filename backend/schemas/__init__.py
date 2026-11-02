@@ -59,6 +59,17 @@ from schemas.record import (
     ToothChartTemplateResponse,
 )
 
+from schemas.chat import (
+    ChatMessageCreate,
+    ChatMessageResponse,
+    ConversationCreate,
+    ConversationResponse,
+    ConversationListResponse,
+    ChatHistoryResponse,
+    MarkReadResponse,
+    WebSocketFrame,
+)
+
 __all__ = [
     "LoginRequest",
     "RegisterRequest",
@@ -108,5 +119,13 @@ __all__ = [
     "SignatureUploadResponse",
     "ToothMetadata",
     "ToothChartTemplateResponse",
+    "ChatMessageCreate",
+    "ChatMessageResponse",
+    "ConversationCreate",
+    "ConversationResponse",
+    "ConversationListResponse",
+    "ChatHistoryResponse",
+    "MarkReadResponse",
+    "WebSocketFrame",
 ]
 
