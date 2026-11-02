@@ -45,6 +45,19 @@ from schemas.appointment import (
     DailyScheduleResponse,
     AppointmentListResponse,
 )
+from schemas.record import (
+    PaymentMethod,
+    PaymentCreate,
+    PaymentResponse,
+    TreatmentRecordCreate,
+    TreatmentRecordUpdate,
+    TreatmentRecordResponse,
+    PatientLedgerSummary,
+    SignatureUploadRequest,
+    SignatureUploadResponse,
+    ToothMetadata,
+    ToothChartTemplateResponse,
+)
 
 __all__ = [
     "LoginRequest",
@@ -84,5 +97,16 @@ __all__ = [
     "AppointmentResponse",
     "DailyScheduleResponse",
     "AppointmentListResponse",
+    "PaymentMethod",
+    "PaymentCreate",
+    "PaymentResponse",
+    "TreatmentRecordCreate",
+    "TreatmentRecordUpdate",
+    "TreatmentRecordResponse",
+    "PatientLedgerSummary",
+    "SignatureUploadRequest",
+    "SignatureUploadResponse",
+    "ToothMetadata",
+    "ToothChartTemplateResponse",
 ]
 
