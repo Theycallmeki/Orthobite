@@ -12,6 +12,7 @@ import models.doctor   # Ensure Doctor models are registered
 import models.appointment  # Ensure Appointment model is registered
 import models.notification  # Ensure NotificationLog model is registered
 import models.record  # Ensure TreatmentRecord & Payment models are registered
+import models.chat  # Ensure Conversation & ChatMessage models are registered
 from middleware import setup_middleware
 from routes.auth import router as auth_router
 from routes.user import router as user_router
@@ -20,6 +21,7 @@ from routes.doctor import router as doctor_router
 from routes.appointment import router as appointment_router
 from routes.notification import router as notification_router
 from routes.record import router as record_router
+from routes.chat import router as chat_router, ws_router as ws_chat_router
 from services.scheduler import start_scheduler, shutdown_scheduler
 
 
@@ -108,5 +110,7 @@ app.include_router(doctor_router)
 app.include_router(appointment_router)
 app.include_router(notification_router)
 app.include_router(record_router)
+app.include_router(chat_router)
+app.include_router(ws_chat_router)
 
 
