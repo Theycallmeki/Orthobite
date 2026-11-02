@@ -4,6 +4,7 @@ from models.doctor import DoctorProfile, AvailabilityRule, TimeOff
 from models.appointment import Appointment, AppointmentStatus
 from models.notification import NotificationLog, NotificationType, NotificationStatus
 from models.record import TreatmentRecord, Payment, PaymentMethod
+from models.chat import Conversation, ChatMessage
 
 __all__ = [
     "User",
@@ -22,6 +23,8 @@ __all__ = [
     "TreatmentRecord",
     "Payment",
     "PaymentMethod",
+    "Conversation",
+    "ChatMessage",
 ]
 
 
