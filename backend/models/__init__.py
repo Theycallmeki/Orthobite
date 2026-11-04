@@ -5,6 +5,7 @@ from models.appointment import Appointment, AppointmentStatus
 from models.notification import NotificationLog, NotificationType, NotificationStatus
 from models.record import TreatmentRecord, Payment, PaymentMethod
 from models.chat import Conversation, ChatMessage
+from models.audit import AuditLog, AuditAction
 
 __all__ = [
     "User",
@@ -25,6 +26,8 @@ __all__ = [
     "PaymentMethod",
     "Conversation",
     "ChatMessage",
+    "AuditLog",
+    "AuditAction",
 ]
 
 

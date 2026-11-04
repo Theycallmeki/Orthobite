@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from config.settings import settings
+from models.audit import AuditAction
 from models.users import User, UserRole
 from schemas.auth import (
     RegisterRequest,
@@ -16,6 +17,7 @@ from schemas.auth import (
     Token,
 )
 from schemas.user import UserResponse
+from services.audit_logger import log_event
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -154,13 +156,27 @@ def create_staff_user(db: Session, data: StaffCreateRequest) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
-def authenticate_user(db: Session, identifier: str, password: str) -> User:
+def authenticate_user(
+    db: Session,
+    identifier: str,
+    password: str,
+    ip_address: Optional[str] = None,
+) -> User:
     """Authenticate via email or username. Raises 401 if invalid."""
     user = db.query(User).filter(
         or_(User.email == identifier, User.username == identifier)
     ).first()
 
     if not user or not verify_password(password, user.hashed_password):
+        # Audit failed login attempt
+        log_event(
+            db=db,
+            action=AuditAction.LOGIN_FAILED,
+            resource="auth",
+            actor_id=user.id if user else None,
+            ip_address=ip_address,
+            extra={"identifier": identifier},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username/email or password.",
@@ -171,6 +187,16 @@ def authenticate_user(db: Session, identifier: str, password: str) -> User:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive. Please contact the clinic.",
         )
+
+    # Audit successful login
+    log_event(
+        db=db,
+        action=AuditAction.LOGIN,
+        resource="auth",
+        actor_id=user.id,
+        ip_address=ip_address,
+    )
+
     return user
 
 
