@@ -1,4 +1,5 @@
 fastapi
+slowapi
 uvicorn[standard]
 sqlalchemy
 alembic
@@ -15,5 +16,6 @@ psycopg[binary]
 apscheduler
 requests
 redis
-fastapi-mail
+fastapi
+slowapi-mail
 aiosmtplib

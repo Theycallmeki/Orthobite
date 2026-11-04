@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 import controllers.auth as auth_controller
@@ -13,6 +15,8 @@ from schemas.auth import (
 )
 from schemas.user import UserResponse
 
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
@@ -22,8 +26,11 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     status_code=status.HTTP_201_CREATED,
     summary="Patient self-registration",
 )
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    """Self-register a new patient account with username, email, phone, and password."""
+@limiter.limit("5/minute")
+def register(request: Request, data: RegisterRequest, db: Session = Depends(get_db)):
+    """Self-register a new patient account with username, email, phone, and password.
+    Rate-limited to 5 requests per minute per IP to prevent abuse.
+    """
     return auth_controller.register_patient(db, data)
 
 
@@ -32,9 +39,15 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     response_model=Token,
     summary="Login with username or email",
 )
-def login(data: LoginRequest, db: Session = Depends(get_db)):
-    """Authenticate using username or email and password. Returns access and refresh tokens."""
-    user = auth_controller.authenticate_user(db, data.identifier, data.password)
+@limiter.limit("10/minute")
+def login(request: Request, data: LoginRequest, db: Session = Depends(get_db)):
+    """Authenticate using username or email and password. Returns access and refresh tokens.
+    Rate-limited to 10 requests per minute per IP to prevent brute-force attacks.
+    """
+    user = auth_controller.authenticate_user(
+        db, data.identifier, data.password,
+        ip_address=request.client.host if request.client else None,
+    )
     return auth_controller.build_token_response(user)
 
 
