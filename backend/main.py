@@ -1,8 +1,12 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from config.settings import settings
 from config.database import Base, engine
@@ -24,10 +28,14 @@ from routes.notification import router as notification_router
 from routes.record import router as record_router
 from routes.chat import router as chat_router, ws_router as ws_chat_router
 from routes.audit import router as audit_router
+from routes.analytics import router as analytics_router
 from services.scheduler import start_scheduler, shutdown_scheduler
 
 
 logger = logging.getLogger("orthobite")
+
+# Global rate limiter (shared with routes/auth.py)
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -51,6 +59,10 @@ app = FastAPI(
     description="Backend API for the OrthoBite Orthodontics and Bite Alignment Platform.",
     lifespan=lifespan,
 )
+
+# Rate limiter state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # ---------------------------------------------------------------------------
@@ -115,3 +127,4 @@ app.include_router(record_router)
 app.include_router(chat_router)
 app.include_router(ws_chat_router)
 app.include_router(audit_router)
+app.include_router(analytics_router)
