@@ -8,6 +8,7 @@ from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from config.settings import settings
+from models.audit import AuditAction
 from models.record import Payment, PaymentMethod, TreatmentRecord
 from models.users import User, UserRole
 from schemas.record import (
@@ -20,6 +21,7 @@ from schemas.record import (
     TreatmentRecordResponse,
     TreatmentRecordUpdate,
 )
+from services.audit_logger import log_event
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +89,12 @@ def compute_treatment_record_response(
     )
 
 
-def compute_patient_ledger_summary(db: Session, patient_id: int) -> PatientLedgerSummary:
+def compute_patient_ledger_summary(
+    db: Session,
+    patient_id: int,
+    actor_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
+) -> PatientLedgerSummary:
     """
     Calculates dynamic ledger balances on the fly across all treatments and payments.
     Prevents balance drift by aggregating directly from raw financial transactions.
@@ -118,7 +125,7 @@ def compute_patient_ledger_summary(db: Session, patient_id: int) -> PatientLedge
     ]
     payment_responses = [PaymentResponse.model_validate(p) for p in all_payments]
 
-    return PatientLedgerSummary(
+    summary = PatientLedgerSummary(
         patient_id=patient.id,
         patient_name=patient.full_name,
         patient_email=patient.email,
@@ -129,6 +136,18 @@ def compute_patient_ledger_summary(db: Session, patient_id: int) -> PatientLedge
         total_amount_paid=total_paid,
         balance_due=balance_due,
     )
+
+    # Audit: sensitive financial ledger was accessed
+    log_event(
+        db=db,
+        action=AuditAction.READ,
+        resource="patient_ledger",
+        actor_id=actor_id,
+        resource_id=patient_id,
+        ip_address=ip_address,
+    )
+
+    return summary
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +211,12 @@ async def save_signature_file(file: UploadFile) -> str:
 # Treatment Records CRUD
 # ---------------------------------------------------------------------------
 
-def create_treatment_record(db: Session, data: TreatmentRecordCreate) -> TreatmentRecordResponse:
+def create_treatment_record(
+    db: Session,
+    data: TreatmentRecordCreate,
+    actor_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
+) -> TreatmentRecordResponse:
     """Creates a new digital treatment entry in the patient ledger."""
     # Validate patient
     get_patient_user_or_404(db, data.patient_id)
@@ -226,6 +250,16 @@ def create_treatment_record(db: Session, data: TreatmentRecordCreate) -> Treatme
     db.commit()
     db.refresh(record)
 
+    log_event(
+        db=db,
+        action=AuditAction.CREATE,
+        resource="treatment_record",
+        actor_id=actor_id,
+        resource_id=record.id,
+        ip_address=ip_address,
+        extra={"treatment_name": record.treatment_name, "patient_id": record.patient_id},
+    )
+
     return compute_treatment_record_response(record)
 
 
@@ -240,7 +274,11 @@ def get_treatment_record_or_404(db: Session, record_id: int) -> TreatmentRecord:
 
 
 def update_treatment_record(
-    db: Session, record_id: int, data: TreatmentRecordUpdate
+    db: Session,
+    record_id: int,
+    data: TreatmentRecordUpdate,
+    actor_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
 ) -> TreatmentRecordResponse:
     """Updates an existing treatment record entry."""
     record = get_treatment_record_or_404(db, record_id)
@@ -267,13 +305,39 @@ def update_treatment_record(
 
     db.commit()
     db.refresh(record)
+
+    log_event(
+        db=db,
+        action=AuditAction.UPDATE,
+        resource="treatment_record",
+        actor_id=actor_id,
+        resource_id=record_id,
+        ip_address=ip_address,
+        extra={"changed_fields": list(data.model_dump(exclude_unset=True).keys())},
+    )
+
     return compute_treatment_record_response(record)
 
 
-def delete_treatment_record(db: Session, record_id: int) -> Dict[str, Any]:
+def delete_treatment_record(
+    db: Session,
+    record_id: int,
+    actor_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
+) -> Dict[str, Any]:
     record = get_treatment_record_or_404(db, record_id)
     db.delete(record)
     db.commit()
+
+    log_event(
+        db=db,
+        action=AuditAction.DELETE,
+        resource="treatment_record",
+        actor_id=actor_id,
+        resource_id=record_id,
+        ip_address=ip_address,
+    )
+
     return {"message": f"Treatment record {record_id} deleted successfully."}
 
 
@@ -282,7 +346,11 @@ def delete_treatment_record(db: Session, record_id: int) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def create_payment(
-    db: Session, data: PaymentCreate, record_id_param: Optional[int] = None
+    db: Session,
+    data: PaymentCreate,
+    record_id_param: Optional[int] = None,
+    actor_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
 ) -> PaymentResponse:
     """
     Records downpayment, installment, or balance settlement.
@@ -323,6 +391,20 @@ def create_payment(
     db.add(payment)
     db.commit()
     db.refresh(payment)
+
+    log_event(
+        db=db,
+        action=AuditAction.CREATE,
+        resource="payment",
+        actor_id=actor_id,
+        resource_id=payment.id,
+        ip_address=ip_address,
+        extra={
+            "amount": str(payment.amount),
+            "method": payment.method.value if payment.method else None,
+            "patient_id": payment.patient_id,
+        },
+    )
 
     return PaymentResponse.model_validate(payment)
 
