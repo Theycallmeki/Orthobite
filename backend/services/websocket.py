@@ -15,7 +15,7 @@ class ConnectionManager:
     """
 
     def __init__(self):
-        # Maps user_id -> Set of active WebSocket client connections
+
         self.active_connections: Dict[int, Set[WebSocket]] = {}
         self.redis_client = None
         self._init_redis()
@@ -84,5 +84,4 @@ class ConnectionManager:
             await self.send_personal_message(user_id, message)
 
 
-# Global WebSocket connection manager instance
 manager = ConnectionManager()

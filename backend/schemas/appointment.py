@@ -6,10 +6,6 @@ from decimal import Decimal
 from models.appointment import AppointmentStatus
 
 
-# ---------------------------------------------------------------------------
-# Nested Profile Summaries for Response Payloads
-# ---------------------------------------------------------------------------
-
 class AppointmentDoctorSummary(BaseModel):
     id: int
     user_id: int
@@ -30,10 +26,6 @@ class AppointmentPatientSummary(BaseModel):
 
     model_config = {"from_attributes": True}
 
-
-# ---------------------------------------------------------------------------
-# Request Payloads
-# ---------------------------------------------------------------------------
 
 class AppointmentCreate(BaseModel):
     doctor_id: int = Field(..., description="ID of the doctor profile to book with")
@@ -63,10 +55,6 @@ class AppointmentStatusUpdate(BaseModel):
     notes: Optional[str] = None
 
 
-# ---------------------------------------------------------------------------
-# Response Payloads
-# ---------------------------------------------------------------------------
-
 class AppointmentResponse(BaseModel):
     id: int
     patient_id: int
@@ -80,7 +68,7 @@ class AppointmentResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    # Enriched presentation fields
+
     doctor: Optional[AppointmentDoctorSummary] = None
     patient: Optional[AppointmentPatientSummary] = None
     formatted_date: Optional[str] = None

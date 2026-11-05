@@ -49,7 +49,7 @@ def get_or_create_conversation(
         db.commit()
         db.refresh(conv)
     elif secretary_id is not None and conv.secretary_id is None:
-        # Assign secretary if not yet assigned
+
         conv.secretary_id = secretary_id
         db.commit()
         db.refresh(conv)
@@ -77,7 +77,7 @@ def format_conversation_response(
     """
     Builds conversation summary including unread message count and last message.
     """
-    # Count messages not sent by the viewer that remain unread
+
     unread_count = (
         db.query(func.count(ChatMessage.id))
         .filter(
@@ -127,7 +127,7 @@ def list_conversations(db: Session, current_user: User) -> ConversationListRespo
             .all()
         )
     else:
-        # Patient view: only their conversation
+
         conversations = (
             db.query(Conversation)
             .filter(Conversation.patient_id == current_user.id)
@@ -135,7 +135,7 @@ def list_conversations(db: Session, current_user: User) -> ConversationListRespo
             .all()
         )
         if not conversations:
-            # Auto-create if empty for current patient
+
             conv = get_or_create_conversation(db, current_user.id)
             conversations = [conv]
 
@@ -195,7 +195,7 @@ def create_chat_message(
     if not sender:
         raise HTTPException(status_code=404, detail="Sender user not found.")
 
-    # Assign secretary if not assigned and sender is staff
+
     if conv.secretary_id is None and sender.role in (UserRole.ADMIN, UserRole.SECRETARY):
         conv.secretary_id = sender.id
 

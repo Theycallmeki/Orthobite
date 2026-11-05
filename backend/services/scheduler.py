@@ -13,13 +13,9 @@ from services.brevo import brevo_service
 
 logger = logging.getLogger("orthobite.scheduler")
 
-# Background scheduler instance
+
 scheduler = BackgroundScheduler(timezone=settings.CLINIC_TIMEZONE)
 
-
-# ---------------------------------------------------------------------------
-# Reminder Scanning & Deduplication Logic
-# ---------------------------------------------------------------------------
 
 def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
     """
@@ -44,9 +40,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
     try:
         now = datetime.now()
 
-        # -------------------------------------------------------------------
-        # 1. Scan for 24-Hour Reminders (±15 min window)
-        # -------------------------------------------------------------------
+
         target_24h = now + timedelta(hours=24)
         win_24h_start = target_24h - timedelta(minutes=15)
         win_24h_end = target_24h + timedelta(minutes=15)
@@ -62,7 +56,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
         )
 
         for appt in appts_24h:
-            # Check deduplication log
+
             existing_log = (
                 db.query(NotificationLog)
                 .filter(
@@ -84,7 +78,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
             if not recipient_email:
                 continue
 
-            # Send 24h reminder
+
             res = brevo_service.send_24h_reminder(
                 recipient_email=recipient_email,
                 recipient_name=recipient_name,
@@ -118,9 +112,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
             else:
                 summary["failed"] += 1
 
-        # -------------------------------------------------------------------
-        # 2. Scan for 2-Hour Reminders (±10 min window)
-        # -------------------------------------------------------------------
+
         target_2h = now + timedelta(hours=2)
         win_2h_start = target_2h - timedelta(minutes=10)
         win_2h_end = target_2h + timedelta(minutes=10)
@@ -136,7 +128,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
         )
 
         for appt in appts_2h:
-            # Check deduplication log
+
             existing_log = (
                 db.query(NotificationLog)
                 .filter(
@@ -158,7 +150,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
             if not recipient_email:
                 continue
 
-            # Send 2h reminder
+
             res = brevo_service.send_2h_reminder(
                 recipient_email=recipient_email,
                 recipient_name=recipient_name,
@@ -200,10 +192,6 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
 
     return summary
 
-
-# ---------------------------------------------------------------------------
-# Immediate Transactional Dispatch Helpers
-# ---------------------------------------------------------------------------
 
 def dispatch_booking_confirmation(db: Session, appointment_id: int) -> Optional[NotificationLog]:
     """Sends immediate booking confirmation email and creates NotificationLog."""
@@ -299,14 +287,10 @@ def dispatch_cancellation_notice(
         return None
 
 
-# ---------------------------------------------------------------------------
-# Scheduler Lifecycle Management
-# ---------------------------------------------------------------------------
-
 def start_scheduler():
     """Initializes and starts the background reminder daemon."""
     if not scheduler.running:
-        # Schedule reminder scan to run every 5 minutes
+
         scheduler.add_job(
             scan_and_send_reminders,
             trigger="interval",

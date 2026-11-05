@@ -63,4 +63,3 @@ def revenue_report(
     Feeds the financial chart on the admin analytics dashboard.
     """
     return analytics_controller.get_revenue_report(db, months)
-

@@ -20,7 +20,7 @@ class DoctorProfile(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationships
+
     user = relationship("User", foreign_keys=[user_id], backref="doctor_profile")
     availability_rules = relationship("AvailabilityRule", back_populates="doctor", cascade="all, delete-orphan")
     time_off_records = relationship("TimeOff", back_populates="doctor", cascade="all, delete-orphan")
@@ -32,9 +32,9 @@ class AvailabilityRule(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     doctor_id = Column(Integer, ForeignKey("doctor_profiles.id"), nullable=False, index=True)
-    day_of_week = Column(Integer, nullable=False)  # 0 = Monday, 1 = Tuesday, ..., 6 = Sunday
-    start_time = Column(Time, nullable=False)      # e.g., 09:00:00
-    end_time = Column(Time, nullable=False)        # e.g., 17:00:00
+    day_of_week = Column(Integer, nullable=False)                                            
+    start_time = Column(Time, nullable=False)                      
+    end_time = Column(Time, nullable=False)                        
     slot_duration_minutes = Column(Integer, default=30, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 

@@ -21,9 +21,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-# ---------------------------------------------------------------------------
-# Allowed origins for CORS (loaded from environment)
-# ---------------------------------------------------------------------------
 
 _configured = settings.FRONTEND_URL.strip()
 
@@ -38,18 +35,13 @@ ALLOWED_ORIGINS = list({
 })
 
 
-# ---------------------------------------------------------------------------
-# Request Logging Middleware
-# Logs every incoming request with method, path, status code, and duration.
-# ---------------------------------------------------------------------------
-
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Skip logging for websocket requests if needed
+
         if request.url.path.startswith("/ws/"):
             return await call_next(request)
 
-        request_id = str(uuid.uuid4())[:8]  # short ID for log correlation
+        request_id = str(uuid.uuid4())[:8]                                
         start = time.perf_counter()
 
         logger.info(
@@ -65,15 +57,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             f"({duration_ms:.1f}ms)"
         )
 
-        # Attach request ID to response headers for client-side tracing
+
         response.headers["X-Request-ID"] = request_id
         return response
 
-
-# ---------------------------------------------------------------------------
-# Security Headers Middleware
-# Adds HTTP security headers to every response.
-# ---------------------------------------------------------------------------
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -90,23 +77,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# ---------------------------------------------------------------------------
-# setup_middleware — call this once from main.py
-# ---------------------------------------------------------------------------
-
 def setup_middleware(app: FastAPI) -> None:
     """Register all middleware on the FastAPI app instance."""
 
-    # Custom middlewares
+
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # CORS — must be added last so it runs outermost (first on every request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-        allow_credentials=True,   # required for Authorization: Bearer header
+        allow_credentials=True,                                              
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],

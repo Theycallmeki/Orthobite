@@ -10,10 +10,6 @@ logger = logging.getLogger("orthobite.brevo")
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
-# ---------------------------------------------------------------------------
-# Base Styled HTML Email Layout
-# ---------------------------------------------------------------------------
-
 def _render_email_wrapper(title: str, content_html: str, action_url: Optional[str] = None, action_label: Optional[str] = None) -> str:
     """Wraps body content in a responsive, branded HTML email template."""
     action_button_html = ""
@@ -89,10 +85,6 @@ def _render_email_wrapper(title: str, content_html: str, action_url: Optional[st
 </body>
 </html>"""
 
-
-# ---------------------------------------------------------------------------
-# Template Generators
-# ---------------------------------------------------------------------------
 
 def render_booking_confirmation_template(
     recipient_name: str,
@@ -301,10 +293,6 @@ def render_2h_reminder_template(
     )
 
 
-# ---------------------------------------------------------------------------
-# Brevo API Client
-# ---------------------------------------------------------------------------
-
 class BrevoEmailService:
     """Client for dispatching transactional emails via Brevo v3 API."""
 
@@ -325,7 +313,7 @@ class BrevoEmailService:
         If BREVO_API_KEY is not configured or in test mode, gracefully simulates delivery.
         """
         if not self.api_key or self.api_key.strip() == "" or self.api_key.startswith("test_"):
-            # Simulation / development fallback mode
+
             simulated_id = f"sim-{uuid.uuid4().hex[:12]}"
             logger.info(
                 f"[BREVO SIMULATED] To: {recipient_email} | Subject: '{subject}' | MessageId: {simulated_id}"
@@ -394,9 +382,6 @@ class BrevoEmailService:
                 "detail": error_msg,
             }
 
-    # -----------------------------------------------------------------------
-    # High-Level Notification Convenience Methods
-    # -----------------------------------------------------------------------
 
     def send_booking_confirmation(
         self,
@@ -497,5 +482,4 @@ class BrevoEmailService:
         )
 
 
-# Global Singleton Instance
 brevo_service = BrevoEmailService()

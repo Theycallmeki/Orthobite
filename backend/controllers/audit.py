@@ -8,17 +8,9 @@ from models.audit import AuditAction, AuditLog
 from schemas.audit import AuditLogListResponse, AuditLogResponse, AuditPurgeResponse
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _to_response(log: AuditLog) -> AuditLogResponse:
     return AuditLogResponse.model_validate(log)
 
-
-# ---------------------------------------------------------------------------
-# Queries
-# ---------------------------------------------------------------------------
 
 def list_audit_logs(
     db:          Session,
@@ -94,4 +86,3 @@ def purge_old_logs(db: Session, older_than_days: int = 365) -> AuditPurgeRespons
         cutoff_date=cutoff,
         message=f"Purged {deleted} audit log entries older than {older_than_days} days.",
     )
-

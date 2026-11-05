@@ -28,10 +28,6 @@ from schemas.appointment import (
 MIN_CANCELLATION_NOTICE_HOURS = 2
 
 
-# ---------------------------------------------------------------------------
-# Internal Helpers & Mappers
-# ---------------------------------------------------------------------------
-
 def get_appointment_or_404(db: Session, appointment_id: int) -> Appointment:
     """Fetch appointment by ID or raise 404."""
     appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
@@ -103,10 +99,6 @@ def compute_slot_duration(db: Session, doctor_id: int, start_time: datetime) -> 
     return rule.slot_duration_minutes if rule else 30
 
 
-# ---------------------------------------------------------------------------
-# Conflict Detection Engine
-# ---------------------------------------------------------------------------
-
 def check_booking_conflicts(
     db: Session,
     doctor_id: int,
@@ -138,7 +130,7 @@ def check_booking_conflicts(
             detail="Cannot book an appointment in the past.",
         )
 
-    # 1. Doctor Profile check
+
     doctor = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
     if not doctor:
         raise HTTPException(
@@ -151,7 +143,7 @@ def check_booking_conflicts(
             detail=f"Dr. {doctor.user.full_name if doctor.user else doctor_id} is currently not accepting new appointments.",
         )
 
-    # 2. Doctor Time-Off Conflict
+
     time_off = (
         db.query(TimeOff)
         .filter(
@@ -168,7 +160,7 @@ def check_booking_conflicts(
             detail=f"Doctor is unavailable due to scheduled time-off{reason_desc}.",
         )
 
-    # 3. Doctor Weekly Availability Rules Compliance
+
     day_rules = (
         db.query(AvailabilityRule)
         .filter(
@@ -179,7 +171,7 @@ def check_booking_conflicts(
         .all()
     )
     if day_rules:
-        # Verify requested slot falls within at least one active working window
+
         start_t = start_time.time()
         end_t = end_time.time()
         within_rule = any(
@@ -192,7 +184,7 @@ def check_booking_conflicts(
                 detail="The requested slot falls outside the doctor's active working hours for this day.",
             )
 
-    # 4. Doctor Double-Booking Conflict Check
+
     doc_conflict_query = db.query(Appointment).filter(
         Appointment.doctor_id == doctor_id,
         Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]),
@@ -208,7 +200,7 @@ def check_booking_conflicts(
             detail="The doctor already has an active appointment scheduled during this time window.",
         )
 
-    # 5. Patient Double-Booking Conflict Check
+
     patient_conflict_query = db.query(Appointment).filter(
         Appointment.patient_id == patient_id,
         Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]),
@@ -224,10 +216,6 @@ def check_booking_conflicts(
             detail="You already have an active appointment scheduled during this time window.",
         )
 
-
-# ---------------------------------------------------------------------------
-# Booking Business Logic
-# ---------------------------------------------------------------------------
 
 def book_appointment(
     db: Session,
@@ -249,7 +237,7 @@ def book_appointment(
             detail=f"Patient user with ID {patient_id} not found.",
         )
 
-    # Auto-provision clinical patient record if not yet created
+
     patient_record = db.query(Patient).filter(Patient.user_id == patient_id).first()
     if not patient_record:
         patient_record = Patient(
@@ -259,13 +247,13 @@ def book_appointment(
         db.add(patient_record)
         db.flush()
 
-    # Determine end_time if omitted
+
     end_time = data.end_time
     if not end_time:
         duration_mins = compute_slot_duration(db, data.doctor_id, data.start_time)
         end_time = data.start_time + timedelta(minutes=duration_mins)
 
-    # Validate conflicts
+
     check_booking_conflicts(
         db=db,
         doctor_id=data.doctor_id,
@@ -287,7 +275,7 @@ def book_appointment(
     db.commit()
     db.refresh(appointment)
 
-    # Dispatch Brevo Booking Confirmation
+
     try:
         from services.scheduler import dispatch_booking_confirmation
         dispatch_booking_confirmation(db, appointment.id)
@@ -296,11 +284,6 @@ def book_appointment(
 
     return to_appointment_response(appointment)
 
-
-
-# ---------------------------------------------------------------------------
-# Patient Schedule Queries
-# ---------------------------------------------------------------------------
 
 def get_patient_appointments(
     db: Session,
@@ -323,10 +306,6 @@ def get_patient_appointments(
     records = query.all()
     return [to_appointment_response(a) for a in records]
 
-
-# ---------------------------------------------------------------------------
-# Doctor Schedule Queries
-# ---------------------------------------------------------------------------
 
 def get_doctor_daily_schedule(
     db: Session,
@@ -369,10 +348,6 @@ def get_doctor_daily_schedule(
     )
 
 
-# ---------------------------------------------------------------------------
-# Secretary & Clinic-Wide Queries
-# ---------------------------------------------------------------------------
-
 def list_secretary_appointments(
     db: Session,
     target_date: Optional[date] = None,
@@ -407,10 +382,6 @@ def list_secretary_appointments(
     )
 
 
-# ---------------------------------------------------------------------------
-# Status Update & Cancellation Rules
-# ---------------------------------------------------------------------------
-
 def update_appointment_status(
     db: Session,
     appointment_id: int,
@@ -425,7 +396,7 @@ def update_appointment_status(
     """
     appt = get_appointment_or_404(db, appointment_id)
 
-    # 1. State machine rules
+
     if appt.status == AppointmentStatus.COMPLETED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -437,7 +408,7 @@ def update_appointment_status(
             detail="Appointment is already cancelled.",
         )
 
-    # 2. Patient-specific restrictions & notice window
+
     if current_user.role == UserRole.PATIENT:
         if appt.patient_id != current_user.id:
             raise HTTPException(
@@ -450,7 +421,7 @@ def update_appointment_status(
                 detail="Patients are only authorized to cancel appointments. Status updates must be performed by clinic staff.",
             )
 
-        # Minimum notice window check
+
         now = datetime.now(timezone.utc if appt.start_time.tzinfo else None)
         if appt.start_time - now < timedelta(hours=MIN_CANCELLATION_NOTICE_HOURS):
             raise HTTPException(
@@ -458,16 +429,16 @@ def update_appointment_status(
                 detail=f"Appointments cannot be cancelled online less than {MIN_CANCELLATION_NOTICE_HOURS} hours before start time. Please call the clinic directly.",
             )
 
-    # 3. Doctor-specific restrictions
+
     elif current_user.role in (UserRole.DOCTOR, UserRole.ORTHODONTIST):
-        # Verify doctor is assigned to this appointment
+
         if not appt.doctor or appt.doctor.user_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Doctors can only manage appointments assigned to them.",
             )
 
-    # 4. Apply status update
+
     appt.status = data.status
     if data.status == AppointmentStatus.CANCELLED:
         appt.cancellation_reason = data.cancellation_reason or "Cancelled by user"
@@ -478,7 +449,7 @@ def update_appointment_status(
     db.commit()
     db.refresh(appt)
 
-    # Dispatch Brevo Cancellation Notice
+
     if data.status == AppointmentStatus.CANCELLED:
         try:
             from services.scheduler import dispatch_cancellation_notice
@@ -489,11 +460,6 @@ def update_appointment_status(
     return to_appointment_response(appt)
 
 
-
-# ---------------------------------------------------------------------------
-# Rescheduling
-# ---------------------------------------------------------------------------
-
 def reschedule_appointment(
     db: Session,
     appointment_id: int,
@@ -503,7 +469,7 @@ def reschedule_appointment(
     """Reschedule an existing appointment to a new date and time."""
     appt = get_appointment_or_404(db, appointment_id)
 
-    # Authorization check
+
     is_staff = current_user.role in (UserRole.ADMIN, UserRole.SECRETARY, UserRole.DOCTOR, UserRole.ORTHODONTIST)
     if not is_staff and appt.patient_id != current_user.id:
         raise HTTPException(
@@ -523,7 +489,7 @@ def reschedule_appointment(
         duration = appt.end_time - appt.start_time
         new_end = new_start + duration
 
-    # Conflict check
+
     check_booking_conflicts(
         db=db,
         doctor_id=appt.doctor_id,

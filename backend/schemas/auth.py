@@ -47,6 +47,6 @@ class RefreshTokenRequest(BaseModel):
 class TokenPayload(BaseModel):
     """JWT decoded payload structure."""
     sub: str
-    type: str  # "access" or "refresh"
+    type: str                         
     role: Optional[str] = None
     exp: Optional[int] = None

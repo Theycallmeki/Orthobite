@@ -19,4 +19,3 @@ __all__ = [
     "ws_chat_router",
 ]
 
-

@@ -3,10 +3,6 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# ---------------------------------------------------------------------------
-# Message Schemas
-# ---------------------------------------------------------------------------
-
 class ChatMessageCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000, description="Message text content")
 
@@ -23,10 +19,6 @@ class ChatMessageResponse(BaseModel):
     is_read: bool
     created_at: py_datetime
 
-
-# ---------------------------------------------------------------------------
-# Conversation Schemas
-# ---------------------------------------------------------------------------
 
 class ConversationCreate(BaseModel):
     patient_id: Optional[int] = Field(
@@ -53,10 +45,6 @@ class ConversationListResponse(BaseModel):
     total_unread: int = 0
 
 
-# ---------------------------------------------------------------------------
-# History & Read Receipt Schemas
-# ---------------------------------------------------------------------------
-
 class ChatHistoryResponse(BaseModel):
     conversation_id: int
     messages: List[ChatMessageResponse]
@@ -71,10 +59,6 @@ class MarkReadResponse(BaseModel):
     marked_read_count: int
     message: str = "Messages marked as read."
 
-
-# ---------------------------------------------------------------------------
-# WebSocket Frame DTO
-# ---------------------------------------------------------------------------
 
 class WebSocketFrame(BaseModel):
     type: str = Field(..., description="Frame type: 'message', 'typing', 'read', 'error', 'ack'")

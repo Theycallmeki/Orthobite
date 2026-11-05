@@ -48,10 +48,9 @@ def log_event(
         )
         db.add(entry)
         db.commit()
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:                    
         logger.error("audit_logger: failed to write audit entry — %s", exc)
         try:
             db.rollback()
         except Exception:
             pass
-

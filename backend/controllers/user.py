@@ -58,7 +58,7 @@ def update_me(db: Session, current_user: User, data: UserUpdate) -> UserResponse
     if data.avatar_url is not None:
         current_user.avatar_url = data.avatar_url
 
-    # Check username uniqueness if changed
+
     if data.username is not None and data.username != current_user.username:
         exists = db.query(User).filter(User.username == data.username).first()
         if exists:
@@ -68,7 +68,7 @@ def update_me(db: Session, current_user: User, data: UserUpdate) -> UserResponse
             )
         current_user.username = data.username
 
-    # Check email uniqueness if changed
+
     if data.email is not None and data.email != current_user.email:
         exists = db.query(User).filter(User.email == data.email).first()
         if exists:

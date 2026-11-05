@@ -77,4 +77,3 @@ def purge_logs(
     Default: 365 days (DPA 2012 recommended minimum).
     """
     return audit_controller.purge_old_logs(db, older_than_days)
-

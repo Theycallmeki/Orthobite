@@ -19,10 +19,6 @@ from schemas.analytics import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Overview
-# ---------------------------------------------------------------------------
-
 def get_clinic_overview(db: Session) -> ClinicOverviewResponse:
     """High-level dashboard counters for the admin panel."""
     total_patients = (
@@ -51,10 +47,6 @@ def get_clinic_overview(db: Session) -> ClinicOverviewResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# Appointment breakdown
-# ---------------------------------------------------------------------------
-
 def get_appointment_breakdown(db: Session, months: int = 12) -> AppointmentBreakdownResponse:
     """
     Returns per-month appointment counts broken down by status
@@ -71,7 +63,7 @@ def get_appointment_breakdown(db: Session, months: int = 12) -> AppointmentBreak
         .all()
     )
 
-    # Aggregate into month buckets
+
     bucket: dict = {}
     for month, status, cnt in rows:
         if month not in bucket:
@@ -94,17 +86,13 @@ def get_appointment_breakdown(db: Session, months: int = 12) -> AppointmentBreak
     return AppointmentBreakdownResponse(months=stats)
 
 
-# ---------------------------------------------------------------------------
-# Revenue report
-# ---------------------------------------------------------------------------
-
 def get_revenue_report(db: Session, months: int = 12) -> RevenueReportResponse:
     """
     Monthly revenue collected (sum of Payment.amount) vs total billed
     (sum of TreatmentRecord.value_of_work) for the last ``months`` months.
     Outstanding = billed − collected.
     """
-    # Payments grouped by month
+
     payment_rows = (
         db.query(
             func.to_char(Payment.payment_date, "YYYY-MM").label("month"),
@@ -114,7 +102,7 @@ def get_revenue_report(db: Session, months: int = 12) -> RevenueReportResponse:
         .all()
     )
 
-    # Billings grouped by month of the treatment record date
+
     billing_rows = (
         db.query(
             func.to_char(TreatmentRecord.date, "YYYY-MM").label("month"),
@@ -124,7 +112,7 @@ def get_revenue_report(db: Session, months: int = 12) -> RevenueReportResponse:
         .all()
     )
 
-    # Merge into a single month map
+
     rev_map: dict = {}
     for month, collected in payment_rows:
         rev_map.setdefault(month, {"collected": Decimal("0"), "billed": Decimal("0")})
@@ -153,4 +141,3 @@ def get_revenue_report(db: Session, months: int = 12) -> RevenueReportResponse:
         grand_total_collected=grand_collected,
         grand_outstanding=grand_billed - grand_collected,
     )
-

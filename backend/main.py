@@ -10,14 +10,14 @@ from slowapi.util import get_remote_address
 
 from config.settings import settings
 from config.database import Base, engine
-import models.users        # Ensure User model is registered
-import models.patient      # Ensure Patient model is registered
-import models.doctor       # Ensure Doctor models are registered
-import models.appointment  # Ensure Appointment model is registered
-import models.notification # Ensure NotificationLog model is registered
-import models.record       # Ensure TreatmentRecord & Payment models are registered
-import models.chat         # Ensure Conversation & ChatMessage models are registered
-import models.audit        # Ensure AuditLog model is registered
+import models.users                                         
+import models.patient                                          
+import models.doctor                                            
+import models.appointment                                          
+import models.notification                                             
+import models.record                                                               
+import models.chat                                                                  
+import models.audit                                             
 from middleware import setup_middleware
 from routes.auth import router as auth_router
 from routes.user import router as user_router
@@ -51,7 +51,6 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Could not shut down background scheduler: {e}")
 
 
-# Initialize FastAPI application
 app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
@@ -59,28 +58,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiter state
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# ---------------------------------------------------------------------------
-# Database table creation
-# ---------------------------------------------------------------------------
 try:
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables initialized successfully.")
 except Exception as e:
     logger.warning(f"Database initialization warning: {e}")
 
-# ---------------------------------------------------------------------------
-# Middleware (CORS, logging, security headers)
-# ---------------------------------------------------------------------------
+
 setup_middleware(app)
 
-# ---------------------------------------------------------------------------
-# Static files — serve uploads at /uploads/...
-# ---------------------------------------------------------------------------
+
 upload_dirs = [
     settings.TOOTH_CHART_DIR,
     settings.SIGNATURES_DIR,
@@ -93,9 +85,7 @@ for folder in upload_dirs:
 
 app.mount(f"/{settings.UPLOAD_DIR}", StaticFiles(directory=settings.UPLOAD_DIR), name=settings.UPLOAD_DIR)
 
-# ---------------------------------------------------------------------------
-# Health / Root Endpoints
-# ---------------------------------------------------------------------------
+
 @app.get("/", tags=["Health"])
 def root():
     return {
@@ -113,9 +103,7 @@ def health():
         "database": engine.name,
     }
 
-# ---------------------------------------------------------------------------
-# Routers
-# ---------------------------------------------------------------------------
+
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(patient_router)

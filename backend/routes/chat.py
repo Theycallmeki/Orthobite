@@ -36,10 +36,6 @@ router = APIRouter(prefix="/chat", tags=["Live Chat & Messaging"])
 ws_router = APIRouter(tags=["Live Chat & Messaging"])
 
 
-# ---------------------------------------------------------------------------
-# WebSocket Authentication Helper
-# ---------------------------------------------------------------------------
-
 def authenticate_ws_token(token: Optional[str], db: Session) -> Optional[User]:
     """Validates JWT access token passed via WebSocket query parameters."""
     if not token:
@@ -55,10 +51,6 @@ def authenticate_ws_token(token: Optional[str], db: Session) -> Optional[User]:
     except (JWTError, ValueError):
         return None
 
-
-# ---------------------------------------------------------------------------
-# Live Bi-Directional WebSocket Connection
-# ---------------------------------------------------------------------------
 
 @ws_router.websocket("/ws/chat")
 async def websocket_chat_endpoint(
@@ -78,7 +70,7 @@ async def websocket_chat_endpoint(
 
         await manager.connect(user.id, websocket)
 
-        # Connection acknowledgment frame
+
         await websocket.send_json({
             "type": "connection_ack",
             "user_id": user.id,
@@ -134,7 +126,7 @@ async def websocket_chat_endpoint(
                     })
                     continue
 
-                # Verify user is a participant or staff
+
                 conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
                 if not conv:
                     await websocket.send_json({"type": "error", "detail": "Conversation not found."})
@@ -145,7 +137,7 @@ async def websocket_chat_endpoint(
                     await websocket.send_json({"type": "error", "detail": "Not authorized in this conversation."})
                     continue
 
-                # Persist message
+
                 msg_response = chat_controller.create_chat_message(db, conv_id, user.id, content)
                 payload = {
                     "type": "new_message",
@@ -153,23 +145,22 @@ async def websocket_chat_endpoint(
                     "message": msg_response.model_dump(mode="json"),
                 }
 
-                # Determine recipients
-                # If patient sent -> notify assigned secretary (or all online staff if unassigned)
+
                 if user.id == conv.patient_id:
                     if conv.secretary_id:
                         await manager.send_personal_message(conv.secretary_id, payload)
                     else:
-                        # Broadcast to all staff online
+
                         staff_users = db.query(User.id).filter(
                             User.role.in_([UserRole.SECRETARY, UserRole.ADMIN])
                         ).all()
                         for (s_id,) in staff_users:
                             await manager.send_personal_message(s_id, payload)
                 else:
-                    # Staff sent -> notify patient
+
                     await manager.send_personal_message(conv.patient_id, payload)
 
-                # Send confirmation back to sender's devices
+
                 await manager.send_personal_message(user.id, payload)
 
     except WebSocketDisconnect:
@@ -182,10 +173,6 @@ async def websocket_chat_endpoint(
     finally:
         db.close()
 
-
-# ---------------------------------------------------------------------------
-# REST Endpoints
-# ---------------------------------------------------------------------------
 
 @router.get(
     "/conversations",
@@ -277,7 +264,7 @@ async def send_message_http(
 
     msg_resp = chat_controller.create_chat_message(db, conversation_id, current_user.id, data.content)
 
-    # Real-time notification to active WebSocket listeners
+
     payload = {
         "type": "new_message",
         "conversation_id": conversation_id,
@@ -311,7 +298,7 @@ async def mark_messages_read(
 
     res = chat_controller.mark_conversation_as_read(db, conversation_id, current_user.id)
 
-    # Real-time read receipt notification
+
     recipient_id = conv.secretary_id if current_user.id == conv.patient_id else conv.patient_id
     if recipient_id:
         await manager.send_personal_message(recipient_id, {

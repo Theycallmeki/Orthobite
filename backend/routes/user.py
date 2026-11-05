@@ -22,10 +22,6 @@ from schemas.user import (
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-# ---------------------------------------------------------------------------
-# Backwards-compatible Auth Aliases (/users/register & /users/login)
-# ---------------------------------------------------------------------------
-
 @router.post(
     "/register",
     response_model=UserResponse,
@@ -47,10 +43,6 @@ def login_alias(data: LoginRequest, db: Session = Depends(get_db)):
     user = auth_controller.authenticate_user(db, data.identifier, data.password)
     return auth_controller.build_token_response(user)
 
-
-# ---------------------------------------------------------------------------
-# Current User Profile
-# ---------------------------------------------------------------------------
 
 @router.get(
     "/me",
@@ -88,10 +80,6 @@ def change_password(
     """Verify old password and set a new password."""
     return user_controller.change_password(db, current_user, data)
 
-
-# ---------------------------------------------------------------------------
-# Staff / Administrative Endpoints
-# ---------------------------------------------------------------------------
 
 @router.post(
     "/staff",

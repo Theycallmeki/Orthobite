@@ -22,10 +22,6 @@ from services.audit_logger import log_event
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# ---------------------------------------------------------------------------
-# Password & JWT Helpers
-# ---------------------------------------------------------------------------
-
 def hash_password(password: str) -> str:
     """Hash plaintext password using bcrypt."""
     return pwd_context.hash(password)
@@ -81,13 +77,9 @@ def build_token_response(user: User) -> Token:
     )
 
 
-# ---------------------------------------------------------------------------
-# Authentication & User Creation Business Logic
-# ---------------------------------------------------------------------------
-
 def register_patient(db: Session, data: RegisterRequest) -> UserResponse:
     """Self-registration for patients."""
-    # Check duplicate email or username
+
     existing = db.query(User).filter(
         or_(User.email == data.email, User.username == data.username)
     ).first()
@@ -168,7 +160,7 @@ def authenticate_user(
     ).first()
 
     if not user or not verify_password(password, user.hashed_password):
-        # Audit failed login attempt
+
         log_event(
             db=db,
             action=AuditAction.LOGIN_FAILED,
@@ -188,7 +180,7 @@ def authenticate_user(
             detail="User account is inactive. Please contact the clinic.",
         )
 
-    # Audit successful login
+
     log_event(
         db=db,
         action=AuditAction.LOGIN,
