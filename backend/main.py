@@ -34,7 +34,6 @@ from services.scheduler import start_scheduler, shutdown_scheduler
 
 logger = logging.getLogger("orthobite")
 
-# Global rate limiter (shared with routes/auth.py)
 limiter = Limiter(key_func=get_remote_address)
 
 

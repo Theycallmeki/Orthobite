@@ -2,9 +2,6 @@ from typing import Dict, List
 from pydantic import BaseModel
 
 
-# ---------------------------------------------------------------------------
-# Overview
-# ---------------------------------------------------------------------------
 
 class ClinicOverviewResponse(BaseModel):
     total_patients:          int
@@ -15,12 +12,10 @@ class ClinicOverviewResponse(BaseModel):
     total_cancelled_appointments: int
 
 
-# ---------------------------------------------------------------------------
-# Monthly appointment breakdown
-# ---------------------------------------------------------------------------
+
 
 class MonthlyAppointmentStat(BaseModel):
-    month:      str   # "YYYY-MM"
+    month:      str   
     total:      int
     confirmed:  int
     completed:  int
@@ -33,9 +28,7 @@ class AppointmentBreakdownResponse(BaseModel):
     months: List[MonthlyAppointmentStat]
 
 
-# ---------------------------------------------------------------------------
-# Revenue
-# ---------------------------------------------------------------------------
+
 
 class MonthlyRevenueStat(BaseModel):
     month:            str   # "YYYY-MM"
