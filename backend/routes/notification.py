@@ -14,10 +14,6 @@ from services.scheduler import scan_and_send_reminders
 router = APIRouter(prefix="/notifications", tags=["Notifications & Reminders"])
 
 
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
 class NotificationLogResponse(BaseModel):
     id: int
     appointment_id: int
@@ -38,10 +34,6 @@ class NotificationListResponse(BaseModel):
     total: int
     logs: List[NotificationLogResponse]
 
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 
 @router.get(
     "/logs",

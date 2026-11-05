@@ -24,10 +24,6 @@ from schemas.record import (
 from services.audit_logger import log_event
 
 
-# ---------------------------------------------------------------------------
-# Dynamic Ledger Calculations (Zero-Drift Financial Mathematics)
-# ---------------------------------------------------------------------------
-
 TWO_PLACES = Decimal("0.01")
 
 
@@ -115,7 +111,7 @@ def compute_patient_ledger_summary(
         .all()
     )
 
-    # Calculate exact dynamic sums
+
     total_val = _quantize_money(sum((t.value_of_work for t in treatments), Decimal("0.00")))
     total_paid = _quantize_money(sum((p.amount for p in all_payments), Decimal("0.00")))
     balance_due = _quantize_money(total_val - total_paid)
@@ -137,7 +133,7 @@ def compute_patient_ledger_summary(
         balance_due=balance_due,
     )
 
-    # Audit: sensitive financial ledger was accessed
+
     log_event(
         db=db,
         action=AuditAction.READ,
@@ -150,10 +146,6 @@ def compute_patient_ledger_summary(
     return summary
 
 
-# ---------------------------------------------------------------------------
-# Signature Storage Engine
-# ---------------------------------------------------------------------------
-
 def save_signature_base64(signature_data: str) -> str:
     """
     Decodes base64 PNG signature string from frontend canvas and saves to disk.
@@ -165,7 +157,7 @@ def save_signature_base64(signature_data: str) -> str:
             detail="Signature data cannot be empty.",
         )
 
-    # Strip header if data URI format (e.g. data:image/png;base64,...)
+
     if "," in signature_data:
         _, base64_str = signature_data.split(",", 1)
     else:
@@ -186,7 +178,7 @@ def save_signature_base64(signature_data: str) -> str:
     with open(filepath, "wb") as f:
         f.write(decoded_bytes)
 
-    # Return static web path
+
     return f"/{settings.SIGNATURES_DIR}/{filename}".replace("\\", "/")
 
 
@@ -207,10 +199,6 @@ async def save_signature_file(file: UploadFile) -> str:
     return f"/{settings.SIGNATURES_DIR}/{filename}".replace("\\", "/")
 
 
-# ---------------------------------------------------------------------------
-# Treatment Records CRUD
-# ---------------------------------------------------------------------------
-
 def create_treatment_record(
     db: Session,
     data: TreatmentRecordCreate,
@@ -218,10 +206,10 @@ def create_treatment_record(
     ip_address: Optional[str] = None,
 ) -> TreatmentRecordResponse:
     """Creates a new digital treatment entry in the patient ledger."""
-    # Validate patient
+
     get_patient_user_or_404(db, data.patient_id)
 
-    # Validate doctor if provided
+
     if data.doctor_id is not None:
         doctor = db.query(User).filter(User.id == data.doctor_id).first()
         if not doctor:
@@ -341,10 +329,6 @@ def delete_treatment_record(
     return {"message": f"Treatment record {record_id} deleted successfully."}
 
 
-# ---------------------------------------------------------------------------
-# Payment Transactions CRUD
-# ---------------------------------------------------------------------------
-
 def create_payment(
     db: Session,
     data: PaymentCreate,
@@ -376,7 +360,7 @@ def create_payment(
             detail="patient_id must be provided or inferred from treatment_record_id.",
         )
 
-    # Validate patient exists
+
     get_patient_user_or_404(db, patient_id)
 
     payment = Payment(
@@ -419,13 +403,8 @@ def get_payment_or_404(db: Session, payment_id: int) -> Payment:
     return payment
 
 
-# ---------------------------------------------------------------------------
-# Rectangular Tooth Template Metadata Engine
-# ---------------------------------------------------------------------------
-
-# Universal (1-32) to FDI mapping table & anatomical specifications
 TOOTH_DEFINITIONS = [
-    # Upper Arch: Patient Right to Left (Universal 1 to 16)
+
     (1, 18, "Maxillary Right Third Molar (Wisdom)", "upper", "upper_right", "molar", 0, 0),
     (2, 17, "Maxillary Right Second Molar", "upper", "upper_right", "molar", 0, 1),
     (3, 16, "Maxillary Right First Molar", "upper", "upper_right", "molar", 0, 2),
@@ -443,8 +422,7 @@ TOOTH_DEFINITIONS = [
     (15, 27, "Maxillary Left Second Molar", "upper", "upper_left", "molar", 0, 14),
     (16, 28, "Maxillary Left Third Molar (Wisdom)", "upper", "upper_left", "molar", 0, 15),
 
-    # Lower Arch: Patient Right to Left (Universal 32 down to 17)
-    # Aligned vertically under the corresponding upper tooth
+
     (32, 48, "Mandibular Right Third Molar (Wisdom)", "lower", "lower_right", "molar", 1, 0),
     (31, 47, "Mandibular Right Second Molar", "lower", "lower_right", "molar", 1, 1),
     (30, 46, "Mandibular Right First Molar", "lower", "lower_right", "molar", 1, 2),

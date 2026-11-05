@@ -19,10 +19,6 @@ from schemas.doctor import (
 router = APIRouter(prefix="/doctors", tags=["Doctors & Availability"])
 
 
-# ---------------------------------------------------------------------------
-# Public Carousel & Calendar Endpoints (No login required)
-# ---------------------------------------------------------------------------
-
 @router.get(
     "/",
     response_model=List[DoctorPublicResponse],
@@ -65,10 +61,6 @@ def get_doctor_by_id(doctor_id: int, db: Session = Depends(get_db)):
     """Public details of a doctor."""
     return doctor_controller.get_doctor_public_profile(db, doctor_id)
 
-
-# ---------------------------------------------------------------------------
-# Authenticated Doctor Self-Management Endpoints
-# ---------------------------------------------------------------------------
 
 @router.get(
     "/me/profile",

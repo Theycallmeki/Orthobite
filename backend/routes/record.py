@@ -66,10 +66,6 @@ async def upload_signature_file(
     return SignatureUploadResponse(signature_url=url)
 
 
-# ---------------------------------------------------------------------------
-# Treatment Records (Staff Only for creation & modification)
-# ---------------------------------------------------------------------------
-
 @router.post(
     "/",
     response_model=TreatmentRecordResponse,
@@ -149,7 +145,6 @@ def delete_treatment_record(
     return record_controller.delete_treatment_record(db, record_id)
 
 
-
 @router.post(
     "/{record_id}/payments",
     response_model=PaymentResponse,
@@ -208,7 +203,6 @@ def get_payment(
             detail="You do not have permission to view this payment.",
         )
     return PaymentResponse.model_validate(payment)
-
 
 
 @router.get(

@@ -6,10 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from models.record import PaymentMethod
 
 
-# ---------------------------------------------------------------------------
-# Payment Schemas
-# ---------------------------------------------------------------------------
-
 class PaymentCreate(BaseModel):
     treatment_record_id: Optional[int] = Field(
         None, description="Optional ID of specific treatment record this payment settles"
@@ -39,10 +35,6 @@ class PaymentResponse(BaseModel):
     notes: Optional[str] = None
     created_at: py_datetime
 
-
-# ---------------------------------------------------------------------------
-# Treatment Record Schemas
-# ---------------------------------------------------------------------------
 
 class TreatmentRecordCreate(BaseModel):
     patient_id: int = Field(..., description="Target patient User ID")
@@ -96,10 +88,6 @@ class TreatmentRecordResponse(BaseModel):
     payments: List[PaymentResponse] = []
 
 
-# ---------------------------------------------------------------------------
-# Patient Ledger Summary Schema
-# ---------------------------------------------------------------------------
-
 class PatientLedgerSummary(BaseModel):
     patient_id: int
     patient_name: str
@@ -112,10 +100,6 @@ class PatientLedgerSummary(BaseModel):
     balance_due: Decimal
 
 
-# ---------------------------------------------------------------------------
-# Signature Schemas
-# ---------------------------------------------------------------------------
-
 class SignatureUploadRequest(BaseModel):
     signature_base64: str = Field(..., description="Base64 encoded data URI (data:image/png;base64,...)")
 
@@ -124,10 +108,6 @@ class SignatureUploadResponse(BaseModel):
     signature_url: str
     message: str = "Signature uploaded successfully."
 
-
-# ---------------------------------------------------------------------------
-# Rectangular Tooth Template Metadata Schemas
-# ---------------------------------------------------------------------------
 
 class ToothMetadata(BaseModel):
     id: int = Field(..., description="Universal Numbering System ID (1 to 32)")

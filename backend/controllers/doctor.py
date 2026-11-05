@@ -32,10 +32,6 @@ DAYS_OF_WEEK_NAMES = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Internal Helpers
-# ---------------------------------------------------------------------------
-
 def get_doctor_profile_or_404(db: Session, doctor_id: int) -> DoctorProfile:
     """Fetch doctor profile by doctor_profile ID."""
     doc = db.query(DoctorProfile).filter(DoctorProfile.id == doctor_id).first()
@@ -89,10 +85,6 @@ def to_doctor_public_response(doc: DoctorProfile) -> DoctorPublicResponse:
     )
 
 
-# ---------------------------------------------------------------------------
-# Public Doctor Carousel Queries
-# ---------------------------------------------------------------------------
-
 def list_public_doctors(db: Session) -> List[DoctorPublicResponse]:
     """Retrieve all active doctors accepting patients for the frontend carousel."""
     doctors = (
@@ -111,10 +103,6 @@ def get_doctor_public_profile(db: Session, doctor_id: int) -> DoctorPublicRespon
     return to_doctor_public_response(doc)
 
 
-# ---------------------------------------------------------------------------
-# Profile Management
-# ---------------------------------------------------------------------------
-
 def update_doctor_profile(
     db: Session,
     profile: DoctorProfile,
@@ -129,17 +117,13 @@ def update_doctor_profile(
     return to_doctor_public_response(profile)
 
 
-# ---------------------------------------------------------------------------
-# Availability Rules
-# ---------------------------------------------------------------------------
-
 def set_doctor_availability_rules(
     db: Session,
     profile: DoctorProfile,
     rules: List[AvailabilityRuleItem],
 ) -> List[AvailabilityRuleResponse]:
     """Replace doctor's weekly recurring availability rules."""
-    # Remove existing rules
+
     db.query(AvailabilityRule).filter(AvailabilityRule.doctor_id == profile.id).delete()
 
     created_rules = []
@@ -178,10 +162,6 @@ def get_doctor_availability_rules(db: Session, doctor_id: int) -> List[Availabil
     return [AvailabilityRuleResponse.model_validate(r) for r in rules]
 
 
-# ---------------------------------------------------------------------------
-# Time Off
-# ---------------------------------------------------------------------------
-
 def add_doctor_time_off(
     db: Session,
     profile: DoctorProfile,
@@ -217,10 +197,6 @@ def list_doctor_time_off(db: Session, doctor_id: int) -> List[TimeOffResponse]:
     return [TimeOffResponse.model_validate(r) for r in records]
 
 
-# ---------------------------------------------------------------------------
-# Availability Slot Generation Engine (For Carousel Calendar)
-# ---------------------------------------------------------------------------
-
 def generate_doctor_availability(
     db: Session,
     doctor_id: int,
@@ -252,7 +228,7 @@ def generate_doctor_availability(
 
     _, num_days = calendar.monthrange(year, month)
 
-    # Fetch active rules mapped by day_of_week
+
     rules = (
         db.query(AvailabilityRule)
         .filter(AvailabilityRule.doctor_id == doctor_id, AvailabilityRule.is_active == True)
@@ -262,7 +238,7 @@ def generate_doctor_availability(
     for r in rules:
         rules_by_day.setdefault(r.day_of_week, []).append(r)
 
-    # Fetch time off ranges covering this month
+
     month_start = datetime(year, month, 1)
     month_end = datetime(year, month, num_days, 23, 59, 59)
     time_off_list = (
@@ -275,7 +251,7 @@ def generate_doctor_availability(
         .all()
     )
 
-    # Fetch active booked appointments covering this month
+
     booked_appointments = (
         db.query(Appointment)
         .filter(
@@ -291,13 +267,13 @@ def generate_doctor_availability(
 
     for day_num in range(1, num_days + 1):
         current_date = date(year, month, day_num)
-        day_of_week = current_date.weekday()  # 0=Monday, ..., 6=Sunday
+        day_of_week = current_date.weekday()                           
         day_rules = rules_by_day.get(day_of_week, [])
 
         day_slots = []
 
         for rule in day_rules:
-            # Generate slots from rule.start_time to rule.end_time
+
             slot_start = datetime.combine(current_date, rule.start_time)
             rule_end = datetime.combine(current_date, rule.end_time)
             slot_delta = timedelta(minutes=rule.slot_duration_minutes)
@@ -305,14 +281,14 @@ def generate_doctor_availability(
             while slot_start + slot_delta <= rule_end:
                 slot_end = slot_start + slot_delta
 
-                # Determine if slot is available
+
                 is_available = True
 
-                # Check if slot is in the past
+
                 if slot_end < now:
                     is_available = False
 
-                # Check overlap with any TimeOff
+
                 if is_available:
                     for to in time_off_list:
                         to_start = to.start_datetime.replace(tzinfo=None) if to.start_datetime.tzinfo else to.start_datetime
@@ -321,7 +297,7 @@ def generate_doctor_availability(
                             is_available = False
                             break
 
-                # Check overlap with any booked appointment
+
                 if is_available:
                     for appt in booked_appointments:
                         appt_start = appt.start_time.replace(tzinfo=None) if appt.start_time.tzinfo else appt.start_time

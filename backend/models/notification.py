@@ -27,7 +27,7 @@ class NotificationLog(Base):
     recipient = Column(String(255), nullable=False, index=True)
     type = Column(Enum(NotificationType), nullable=False, index=True)
     status = Column(Enum(NotificationStatus), default=NotificationStatus.PENDING, nullable=False, index=True)
-    
+
     subject = Column(String(255), nullable=True)
     brevo_message_id = Column(String(255), nullable=True)
     error_message = Column(Text, nullable=True)
@@ -35,10 +35,10 @@ class NotificationLog(Base):
     sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
+
     appointment = relationship("Appointment", foreign_keys=[appointment_id], backref="notification_logs")
 
-    # Composite index for fast deduplication lookups
+
     __table_args__ = (
         Index("ix_notification_logs_appt_type_status", "appointment_id", "type", "status"),
     )

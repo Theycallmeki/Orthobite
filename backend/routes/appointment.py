@@ -28,10 +28,6 @@ from schemas.appointment import (
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
 
-# ---------------------------------------------------------------------------
-# Patient & Staff Booking Endpoints
-# ---------------------------------------------------------------------------
-
 @router.post(
     "/",
     response_model=AppointmentResponse,
@@ -68,10 +64,6 @@ def book_appointment(
     )
 
 
-# ---------------------------------------------------------------------------
-# Patient Schedule View
-# ---------------------------------------------------------------------------
-
 @router.get(
     "/me",
     response_model=List[AppointmentResponse],
@@ -102,10 +94,6 @@ def get_my_appointments(
     )
 
 
-# ---------------------------------------------------------------------------
-# Doctor Daily Schedule View
-# ---------------------------------------------------------------------------
-
 @router.get(
     "/doctor/today",
     response_model=DailyScheduleResponse,
@@ -131,10 +119,6 @@ def get_doctor_today_schedule(
         target_date=target_date,
     )
 
-
-# ---------------------------------------------------------------------------
-# Secretary Clinic-Wide Schedule View
-# ---------------------------------------------------------------------------
 
 @router.get(
     "/secretary",
@@ -175,10 +159,6 @@ def get_secretary_schedule(
     )
 
 
-# ---------------------------------------------------------------------------
-# Appointment Details, Status Management & Rescheduling
-# ---------------------------------------------------------------------------
-
 @router.get(
     "/{appointment_id}",
     response_model=AppointmentResponse,
@@ -192,7 +172,7 @@ def get_appointment_details(
     """Fetch details of a specific appointment."""
     appt = appointment_controller.get_appointment_or_404(db, appointment_id)
 
-    # Permission check: patient, assigned doctor, or staff
+
     is_staff = current_user.role in (UserRole.ADMIN, UserRole.SECRETARY)
     is_own_doc = appt.doctor and appt.doctor.user_id == current_user.id
     if not is_staff and not is_own_doc and appt.patient_id != current_user.id:

@@ -6,10 +6,6 @@ from pydantic import BaseModel
 from models.audit import AuditAction
 
 
-# ---------------------------------------------------------------------------
-# Response
-# ---------------------------------------------------------------------------
-
 class AuditLogResponse(BaseModel):
     id:          int
     actor_id:    Optional[int]
@@ -23,10 +19,6 @@ class AuditLogResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ---------------------------------------------------------------------------
-# Paginated list wrapper
-# ---------------------------------------------------------------------------
-
 class AuditLogListResponse(BaseModel):
     total:  int
     page:   int
@@ -34,12 +26,7 @@ class AuditLogListResponse(BaseModel):
     items:  List[AuditLogResponse]
 
 
-# ---------------------------------------------------------------------------
-# Purge response
-# ---------------------------------------------------------------------------
-
 class AuditPurgeResponse(BaseModel):
     deleted_count: int
     cutoff_date:   datetime
     message:       str
-

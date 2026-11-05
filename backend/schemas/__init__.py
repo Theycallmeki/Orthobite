@@ -128,4 +128,3 @@ __all__ = [
     "MarkReadResponse",
     "WebSocketFrame",
 ]
-

@@ -4,10 +4,6 @@ from datetime import time, datetime
 from decimal import Decimal
 
 
-# ---------------------------------------------------------------------------
-# Doctor Profile Schemas
-# ---------------------------------------------------------------------------
-
 class DoctorProfileBase(BaseModel):
     specialty: str = Field("Orthodontics", max_length=100)
     bio: Optional[str] = None
@@ -43,10 +39,6 @@ class DoctorPublicResponse(DoctorProfileBase):
     model_config = {"from_attributes": True}
 
 
-# ---------------------------------------------------------------------------
-# Availability Rules Schemas (Weekly recurring rules)
-# ---------------------------------------------------------------------------
-
 class AvailabilityRuleItem(BaseModel):
     day_of_week: int = Field(..., ge=0, le=6, description="0=Monday, 1=Tuesday, ..., 6=Sunday")
     start_time: time = Field(..., description="HH:MM:SS format e.g. 09:00:00")
@@ -66,10 +58,6 @@ class AvailabilityRuleResponse(AvailabilityRuleItem):
     model_config = {"from_attributes": True}
 
 
-# ---------------------------------------------------------------------------
-# Time Off Schemas
-# ---------------------------------------------------------------------------
-
 class TimeOffCreate(BaseModel):
     start_datetime: datetime
     end_datetime: datetime
@@ -84,26 +72,22 @@ class TimeOffResponse(TimeOffCreate):
     model_config = {"from_attributes": True}
 
 
-# ---------------------------------------------------------------------------
-# Calendar Slot Generation Schemas (For Doctor Carousel Calendar)
-# ---------------------------------------------------------------------------
-
 class TimeSlot(BaseModel):
-    start_time: str      # ISO format e.g. "2026-11-02T09:00:00"
-    end_time: str        # ISO format e.g. "2026-11-02T09:30:00"
-    formatted_time: str  # Display format e.g. "09:00 AM"
-    is_available: bool   # False if in the past, time off, or already booked
+    start_time: str                                             
+    end_time: str                                               
+    formatted_time: str                                  
+    is_available: bool                                                      
 
 
 class DayAvailability(BaseModel):
-    date: str                  # YYYY-MM-DD
-    day_of_week: int           # 0=Monday, ..., 6=Sunday
-    day_name: str              # "Monday", "Tuesday", etc.
+    date: str                              
+    day_of_week: int                                    
+    day_name: str                                         
     slots: List[TimeSlot]
 
 
 class DoctorAvailabilityResponse(BaseModel):
     doctor_id: int
     doctor_name: str
-    month: str                 # YYYY-MM
+    month: str                          
     days: List[DayAvailability]

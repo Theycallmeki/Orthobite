@@ -54,7 +54,6 @@ def require_role(*allowed_roles: UserRole) -> Callable[[User], User]:
     return role_checker
 
 
-# Specific Role Guards
 require_admin = require_role(UserRole.ADMIN)
 
 require_doctor = require_role(UserRole.DOCTOR, UserRole.ORTHODONTIST, UserRole.ADMIN)

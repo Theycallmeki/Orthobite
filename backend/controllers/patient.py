@@ -27,7 +27,7 @@ def create_patient(db: Session, data: PatientCreate) -> PatientResponse:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Linked user with ID {data.user_id} does not exist.",
             )
-        # Check if already exists for this user
+
         existing = db.query(Patient).filter(Patient.user_id == data.user_id).first()
         if existing:
             raise HTTPException(

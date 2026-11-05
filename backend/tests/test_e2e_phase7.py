@@ -21,9 +21,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# ---------------------------------------------------------------------------
-# In-memory SQLite test database setup
-# ---------------------------------------------------------------------------
+
 TEST_DATABASE_URL = "sqlite:///./test_orthobite.db"
 
 os.environ.setdefault("DATABASE_URL", TEST_DATABASE_URL)
@@ -59,7 +57,7 @@ def setup_database():
     Base.metadata.create_all(bind=engine_test)
     yield
     Base.metadata.drop_all(bind=engine_test)
-    # Clean up test db file
+
     if os.path.exists("test_orthobite.db"):
         os.remove("test_orthobite.db")
 
@@ -70,15 +68,8 @@ def client():
         yield c
 
 
-# ---------------------------------------------------------------------------
-# Shared state across tests
-# ---------------------------------------------------------------------------
 state: dict = {}
 
-
-# ===========================================================================
-# PHASE 1 — Authentication
-# ===========================================================================
 
 class TestPhase1Auth:
     def test_patient_register(self, client):
@@ -118,7 +109,7 @@ class TestPhase1Auth:
         })
         assert resp.status_code == 201
 
-        # Manually elevate to admin in test DB
+
         db = TestingSession()
         from models.users import User, UserRole
         user = db.query(User).filter(User.username == "adminuser").first()
@@ -153,14 +144,10 @@ class TestPhase1Auth:
         assert "access_token" in resp2.json()
 
 
-# ===========================================================================
-# PHASE 2 — Doctor Profile & Availability
-# ===========================================================================
-
 class TestPhase2Doctor:
     def test_doctor_created_and_profile_set(self, client):
         """Phase 2: Create doctor account then set availability rules."""
-        # Create a doctor via admin staff endpoint
+
         resp = client.post(
             "/auth/staff",
             json={
@@ -173,7 +160,7 @@ class TestPhase2Doctor:
             },
             headers={"Authorization": f"Bearer {state['admin_token']}"},
         )
-        # Accept 201 or 200 depending on route
+
         assert resp.status_code in (200, 201)
         state["doctor_user_id"] = resp.json()["id"]
 
@@ -197,14 +184,10 @@ class TestPhase2Doctor:
         assert len(resp.json()) >= 1
 
 
-# ===========================================================================
-# PHASE 3 — Appointment Booking
-# ===========================================================================
-
 class TestPhase3Appointments:
     def test_book_appointment(self, client):
         """Phase 3: Patient can book an appointment with a doctor."""
-        # Find the doctor profile id
+
         resp = client.get("/doctors/", headers={"Authorization": f"Bearer {state['patient_token']}"})
         doctors = resp.json()
         if not doctors:
@@ -253,10 +236,6 @@ class TestPhase3Appointments:
         assert resp.status_code in (400, 409)
 
 
-# ===========================================================================
-# PHASE 4 — Email Notification Log
-# ===========================================================================
-
 class TestPhase4Notifications:
     def test_notification_log_accessible(self, client):
         """Phase 4: Notification logs endpoint is accessible by admin."""
@@ -267,10 +246,6 @@ class TestPhase4Notifications:
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
-
-# ===========================================================================
-# PHASE 5 — Treatment Records & Financial Ledger
-# ===========================================================================
 
 class TestPhase5Records:
     def test_create_treatment_record(self, client):
@@ -315,10 +290,6 @@ class TestPhase5Records:
         assert float(ledger["balance_due"]) == 3500.00
 
 
-# ===========================================================================
-# PHASE 6 — WebSocket Chat
-# ===========================================================================
-
 class TestPhase6Chat:
     def test_conversation_created(self, client):
         """Phase 6: Chat conversation can be created between patient and secretary."""
@@ -328,10 +299,6 @@ class TestPhase6Chat:
         )
         assert resp.status_code == 200
 
-
-# ===========================================================================
-# PHASE 7 — Audit Logging, Rate Limiting & Analytics
-# ===========================================================================
 
 class TestPhase7Compliance:
     def test_audit_log_created_on_login(self, client):
@@ -346,7 +313,7 @@ class TestPhase7Compliance:
 
     def test_audit_log_created_on_failed_login(self, client):
         """Phase 7: A LOGIN_FAILED audit entry exists after bad credentials."""
-        # Trigger a failed login
+
         client.post("/auth/login", json={"identifier": "nobody", "password": "bad"})
 
         resp = client.get(
@@ -418,7 +385,7 @@ class TestPhase7Compliance:
         assert "grand_total_billed" in data
         assert "grand_total_collected" in data
         assert "grand_outstanding" in data
-        # Must match Phase 5 data we seeded
+
         assert data["grand_total_billed"] >= 5000.0
         assert data["grand_total_collected"] >= 1500.0
 
@@ -429,4 +396,3 @@ class TestPhase7Compliance:
             headers={"Authorization": f"Bearer {state['admin_token']}"},
         )
         assert resp.status_code == 400
-
