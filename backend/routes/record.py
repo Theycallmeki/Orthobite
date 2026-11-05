@@ -22,10 +22,6 @@ from schemas.record import (
 router = APIRouter(prefix="/records", tags=["Treatment Records & Financial Ledger"])
 
 
-# ---------------------------------------------------------------------------
-# Tooth Chart Template (Public / Authenticated)
-# ---------------------------------------------------------------------------
-
 @router.get(
     "/tooth-chart/template",
     response_model=ToothChartTemplateResponse,
@@ -39,10 +35,6 @@ def get_tooth_chart_template():
     """
     return record_controller.generate_tooth_chart_template()
 
-
-# ---------------------------------------------------------------------------
-# Signature Upload Endpoint
-# ---------------------------------------------------------------------------
 
 @router.post(
     "/signature/upload",
@@ -93,7 +85,6 @@ def create_treatment_record(
     Adds a new clinical procedure entry to the patient's digital treatment ledger.
     Captures procedure name, tooth number(s), agreed value of work, and patient signature.
     """
-    # If doctor_id is omitted and creator is a doctor/orthodontist, auto-assign
     if data.doctor_id is None and current_user.role in (UserRole.DOCTOR, UserRole.ORTHODONTIST):
         data.doctor_id = current_user.id
 
@@ -158,9 +149,6 @@ def delete_treatment_record(
     return record_controller.delete_treatment_record(db, record_id)
 
 
-# ---------------------------------------------------------------------------
-# Payment Transactions (Staff only)
-# ---------------------------------------------------------------------------
 
 @router.post(
     "/{record_id}/payments",
@@ -222,9 +210,6 @@ def get_payment(
     return PaymentResponse.model_validate(payment)
 
 
-# ---------------------------------------------------------------------------
-# Complete Patient Financial & Treatment Ledger
-# ---------------------------------------------------------------------------
 
 @router.get(
     "/patient/{patient_id}/ledger",
@@ -241,11 +226,9 @@ def get_patient_ledger(
     Aggregates all treatment rows, payment installments, total value of work,
     total amount paid, and net balance due on the fly to prevent balance drift.
     """
-    # Check if patient_id refers to a Patient profile ID instead of User ID
     resolved_patient_id = patient_id
     patient_user = db.query(User).filter(User.id == patient_id).first()
     if not patient_user:
-        # Check if patient_id is from patients table
         patient_profile = db.query(Patient).filter(Patient.id == patient_id).first()
         if patient_profile and patient_profile.user_id:
             resolved_patient_id = patient_profile.user_id
