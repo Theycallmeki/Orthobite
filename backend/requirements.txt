@@ -16,6 +16,5 @@ psycopg[binary]
 apscheduler
 requests
 redis
-fastapi
-slowapi-mail
+fastapi-mail
 aiosmtplib

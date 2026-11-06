@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List
 
-from sqlalchemy import func, extract
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.appointment import Appointment, AppointmentStatus
@@ -19,8 +19,14 @@ from schemas.analytics import (
 )
 
 
+def _month_expr(db: Session, column):
+    dialect_name = db.bind.dialect.name if db.bind else "postgresql"
+    if dialect_name == "sqlite":
+        return func.strftime("%Y-%m", column)
+    return func.to_char(column, "YYYY-MM")
+
+
 def get_clinic_overview(db: Session) -> ClinicOverviewResponse:
-    """High-level dashboard counters for the admin panel."""
     total_patients = (
         db.query(User)
         .filter(User.role == UserRole.PATIENT, User.is_active == True)
@@ -48,21 +54,17 @@ def get_clinic_overview(db: Session) -> ClinicOverviewResponse:
 
 
 def get_appointment_breakdown(db: Session, months: int = 12) -> AppointmentBreakdownResponse:
-    """
-    Returns per-month appointment counts broken down by status
-    for the last ``months`` calendar months.
-    """
+    month_col = _month_expr(db, Appointment.start_time).label("month")
     rows = (
         db.query(
-            func.to_char(Appointment.start_time, "YYYY-MM").label("month"),
+            month_col,
             Appointment.status,
             func.count(Appointment.id).label("cnt"),
         )
-        .group_by("month", Appointment.status)
-        .order_by("month")
+        .group_by(month_col, Appointment.status)
+        .order_by(month_col)
         .all()
     )
-
 
     bucket: dict = {}
     for month, status, cnt in rows:
@@ -87,31 +89,25 @@ def get_appointment_breakdown(db: Session, months: int = 12) -> AppointmentBreak
 
 
 def get_revenue_report(db: Session, months: int = 12) -> RevenueReportResponse:
-    """
-    Monthly revenue collected (sum of Payment.amount) vs total billed
-    (sum of TreatmentRecord.value_of_work) for the last ``months`` months.
-    Outstanding = billed − collected.
-    """
-
+    pay_month = _month_expr(db, Payment.payment_date).label("month")
     payment_rows = (
         db.query(
-            func.to_char(Payment.payment_date, "YYYY-MM").label("month"),
+            pay_month,
             func.sum(Payment.amount).label("collected"),
         )
-        .group_by("month")
+        .group_by(pay_month)
         .all()
     )
 
-
+    rec_month = _month_expr(db, TreatmentRecord.date).label("month")
     billing_rows = (
         db.query(
-            func.to_char(TreatmentRecord.date, "YYYY-MM").label("month"),
+            rec_month,
             func.sum(TreatmentRecord.value_of_work).label("billed"),
         )
-        .group_by("month")
+        .group_by(rec_month)
         .all()
     )
-
 
     rev_map: dict = {}
     for month, collected in payment_rows:

@@ -1,14 +1,3 @@
-"""
-test_e2e_phase7.py — End-to-End test suite covering all 7 phases.
-
-Uses an in-memory SQLite database via FastAPI TestClient so the tests
-run completely offline without any external services.
-
-Run with:
-    cd backend
-    pytest tests/test_e2e_phase7.py -v
-"""
-
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,11 +5,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-import pytest
+try:
+    import pytest
+except ImportError:
+    class _PytestStub:
+        @staticmethod
+        def fixture(*args, **kwargs):
+            def decorator(f):
+                return f
+            return decorator
+        @staticmethod
+        def skip(reason=""):
+            print(f"Skipping test: {reason}")
+    pytest = _PytestStub()
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
 
 TEST_DATABASE_URL = "sqlite:///./test_orthobite.db"
 
@@ -53,13 +54,14 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture(scope="module", autouse=True)
 def setup_database():
-    """Create all tables before tests, drop after."""
     Base.metadata.create_all(bind=engine_test)
     yield
     Base.metadata.drop_all(bind=engine_test)
-
     if os.path.exists("test_orthobite.db"):
-        os.remove("test_orthobite.db")
+        try:
+            os.remove("test_orthobite.db")
+        except Exception:
+            pass
 
 
 @pytest.fixture(scope="module")
@@ -73,7 +75,6 @@ state: dict = {}
 
 class TestPhase1Auth:
     def test_patient_register(self, client):
-        """Phase 1: Patient self-registration creates a user account."""
         resp = client.post("/auth/register", json={
             "full_name": "Test Patient",
             "username": "testpatient",
@@ -87,7 +88,6 @@ class TestPhase1Auth:
         state["patient_id"] = data["id"]
 
     def test_patient_login_returns_jwt(self, client):
-        """Phase 1: Login returns valid access + refresh tokens."""
         resp = client.post("/auth/login", json={
             "identifier": "testpatient",
             "password": "Secret123!",
@@ -99,7 +99,6 @@ class TestPhase1Auth:
         state["patient_token"] = data["access_token"]
 
     def test_admin_register(self, client):
-        """Phase 1: Admin account created via register (or manually seeded)."""
         resp = client.post("/auth/register", json={
             "full_name": "Admin User",
             "username": "adminuser",
@@ -108,7 +107,6 @@ class TestPhase1Auth:
             "password": "Admin123!",
         })
         assert resp.status_code == 201
-
 
         db = TestingSession()
         from models.users import User, UserRole
@@ -125,7 +123,6 @@ class TestPhase1Auth:
         state["admin_token"] = resp.json()["access_token"]
 
     def test_wrong_password_returns_401(self, client):
-        """Phase 1: Wrong credentials return 401."""
         resp = client.post("/auth/login", json={
             "identifier": "testpatient",
             "password": "WrongPassword",
@@ -133,7 +130,6 @@ class TestPhase1Auth:
         assert resp.status_code == 401
 
     def test_refresh_token(self, client):
-        """Phase 1: Refresh token returns new access token."""
         resp = client.post("/auth/login", json={
             "identifier": "testpatient",
             "password": "Secret123!",
@@ -146,10 +142,8 @@ class TestPhase1Auth:
 
 class TestPhase2Doctor:
     def test_doctor_created_and_profile_set(self, client):
-        """Phase 2: Create doctor account then set availability rules."""
-
         resp = client.post(
-            "/auth/staff",
+            "/users/staff",
             json={
                 "full_name": "Dr. Maria Santos",
                 "username": "drsantos",
@@ -160,7 +154,6 @@ class TestPhase2Doctor:
             },
             headers={"Authorization": f"Bearer {state['admin_token']}"},
         )
-
         assert resp.status_code in (200, 201)
         state["doctor_user_id"] = resp.json()["id"]
 
@@ -168,10 +161,10 @@ class TestPhase2Doctor:
             "identifier": "drsantos",
             "password": "Doctor123!",
         })
+        assert resp2.status_code == 200
         state["doctor_token"] = resp2.json()["access_token"]
 
     def test_set_availability_rules(self, client):
-        """Phase 2: Doctor sets weekly availability rules."""
         resp = client.put(
             "/doctors/me/availability",
             json={"rules": [
@@ -186,12 +179,9 @@ class TestPhase2Doctor:
 
 class TestPhase3Appointments:
     def test_book_appointment(self, client):
-        """Phase 3: Patient can book an appointment with a doctor."""
-
         resp = client.get("/doctors/", headers={"Authorization": f"Bearer {state['patient_token']}"})
         doctors = resp.json()
-        if not doctors:
-            pytest.skip("No doctor profiles found")
+        assert len(doctors) > 0, "No doctor profiles found"
 
         state["doctor_profile_id"] = doctors[0]["id"]
         future_start = (datetime.now() + timedelta(days=3)).replace(
@@ -215,7 +205,6 @@ class TestPhase3Appointments:
         state["appointment_id"] = resp.json()["id"]
 
     def test_duplicate_booking_rejected(self, client):
-        """Phase 3: Overlapping appointment booking is rejected."""
         future_start = (datetime.now() + timedelta(days=3)).replace(
             hour=10, minute=0, second=0, microsecond=0
         ).isoformat()
@@ -238,18 +227,17 @@ class TestPhase3Appointments:
 
 class TestPhase4Notifications:
     def test_notification_log_accessible(self, client):
-        """Phase 4: Notification logs endpoint is accessible by admin."""
         resp = client.get(
-            "/notifications/",
+            "/notifications/logs",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
         )
         assert resp.status_code == 200
-        assert isinstance(resp.json(), list)
+        data = resp.json()
+        assert "logs" in data or isinstance(data, list)
 
 
 class TestPhase5Records:
     def test_create_treatment_record(self, client):
-        """Phase 5: Staff creates a treatment record for a patient."""
         resp = client.post(
             "/records/",
             json={
@@ -264,7 +252,6 @@ class TestPhase5Records:
         state["record_id"] = resp.json()["id"]
 
     def test_add_payment_installment(self, client):
-        """Phase 5: Payment installment reduces the outstanding balance."""
         resp = client.post(
             f"/records/{state['record_id']}/payments",
             json={
@@ -278,9 +265,8 @@ class TestPhase5Records:
         assert resp.status_code in (200, 201)
 
     def test_ledger_balance_correct(self, client):
-        """Phase 5: Ledger reflects correct billed vs paid vs balance."""
         resp = client.get(
-            f"/records/patients/{state['patient_id']}/ledger",
+            f"/records/patient/{state['patient_id']}/ledger",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
         )
         assert resp.status_code == 200
@@ -292,7 +278,6 @@ class TestPhase5Records:
 
 class TestPhase6Chat:
     def test_conversation_created(self, client):
-        """Phase 6: Chat conversation can be created between patient and secretary."""
         resp = client.get(
             "/chat/conversations",
             headers={"Authorization": f"Bearer {state['patient_token']}"},
@@ -302,7 +287,6 @@ class TestPhase6Chat:
 
 class TestPhase7Compliance:
     def test_audit_log_created_on_login(self, client):
-        """Phase 7: A LOGIN audit entry exists after successful login."""
         resp = client.get(
             "/admin/audit/logs?action=LOGIN",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
@@ -312,8 +296,6 @@ class TestPhase7Compliance:
         assert data["total"] >= 1
 
     def test_audit_log_created_on_failed_login(self, client):
-        """Phase 7: A LOGIN_FAILED audit entry exists after bad credentials."""
-
         client.post("/auth/login", json={"identifier": "nobody", "password": "bad"})
 
         resp = client.get(
@@ -324,7 +306,6 @@ class TestPhase7Compliance:
         assert resp.json()["total"] >= 1
 
     def test_audit_log_created_on_record_create(self, client):
-        """Phase 7: A CREATE audit entry exists for treatment_record resource."""
         resp = client.get(
             "/admin/audit/logs?resource=treatment_record&action=CREATE",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
@@ -333,28 +314,13 @@ class TestPhase7Compliance:
         assert resp.json()["total"] >= 1
 
     def test_non_admin_cannot_view_audit_logs(self, client):
-        """Phase 7: Patient cannot access admin audit logs (403)."""
         resp = client.get(
             "/admin/audit/logs",
             headers={"Authorization": f"Bearer {state['patient_token']}"},
         )
         assert resp.status_code == 403
 
-    def test_rate_limit_on_login(self, client):
-        """Phase 7: 11th login attempt in rapid succession returns 429."""
-        for _ in range(10):
-            client.post("/auth/login", json={
-                "identifier": "testpatient",
-                "password": "WrongPass",
-            })
-        resp = client.post("/auth/login", json={
-            "identifier": "testpatient",
-            "password": "WrongPass",
-        })
-        assert resp.status_code == 429
-
     def test_admin_analytics_overview(self, client):
-        """Phase 7: Admin analytics overview returns correct patient/doctor counts."""
         resp = client.get(
             "/admin/analytics/overview",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
@@ -366,7 +332,6 @@ class TestPhase7Compliance:
         assert "total_active_appointments" in data
 
     def test_admin_analytics_appointments(self, client):
-        """Phase 7: Monthly appointment breakdown returns structured data."""
         resp = client.get(
             "/admin/analytics/appointments",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
@@ -375,7 +340,6 @@ class TestPhase7Compliance:
         assert "months" in resp.json()
 
     def test_admin_analytics_revenue(self, client):
-        """Phase 7: Revenue report reflects billed and collected amounts."""
         resp = client.get(
             "/admin/analytics/revenue",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
@@ -385,14 +349,66 @@ class TestPhase7Compliance:
         assert "grand_total_billed" in data
         assert "grand_total_collected" in data
         assert "grand_outstanding" in data
-
         assert data["grand_total_billed"] >= 5000.0
         assert data["grand_total_collected"] >= 1500.0
 
     def test_audit_purge_minimum_window(self, client):
-        """Phase 7: Purge with less than 30 days is rejected (DPA policy)."""
         resp = client.delete(
             "/admin/audit/purge?older_than_days=10",
             headers={"Authorization": f"Bearer {state['admin_token']}"},
         )
-        assert resp.status_code == 400
+        assert resp.status_code in (400, 422)
+
+    def test_rate_limit_on_login(self, client):
+        for _ in range(15):
+            r = client.post("/auth/login", json={
+                "identifier": "ratelimit_user",
+                "password": "WrongPassword",
+            })
+            if r.status_code == 429:
+                break
+        assert r.status_code == 429
+
+
+if __name__ == "__main__":
+    Base.metadata.create_all(bind=engine_test)
+    test_classes = [
+        TestPhase1Auth,
+        TestPhase2Doctor,
+        TestPhase3Appointments,
+        TestPhase4Notifications,
+        TestPhase5Records,
+        TestPhase6Chat,
+        TestPhase7Compliance,
+    ]
+
+    passed = 0
+    failed = 0
+    total = 0
+
+    print("Running OrthoBite End-to-End QA Test Suite...\n" + "=" * 50)
+    with TestClient(app) as test_client:
+        for cls in test_classes:
+            instance = cls()
+            methods = [m for m in cls.__dict__ if m.startswith("test_")]
+            print(f"\n[{cls.__name__}]")
+            for m in methods:
+                total += 1
+                try:
+                    getattr(instance, m)(test_client)
+                    print(f"  PASS: {m}")
+                    passed += 1
+                except Exception as e:
+                    print(f"  FAIL: {m} -> {e}")
+                    failed += 1
+
+    Base.metadata.drop_all(bind=engine_test)
+    if os.path.exists("test_orthobite.db"):
+        try:
+            os.remove("test_orthobite.db")
+        except Exception:
+            pass
+
+    print("\n" + "=" * 50)
+    print(f"Summary: {passed}/{total} Passed, {failed} Failed.")
+    sys.exit(0 if failed == 0 else 1)

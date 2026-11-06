@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 import controllers.record as record_controller
@@ -28,42 +28,41 @@ router = APIRouter(prefix="/records", tags=["Treatment Records & Financial Ledge
     summary="Get rectangular tooth chart layout metadata",
 )
 def get_tooth_chart_template():
-    """
-    Serves rectangular tooth chart coordinate metadata and layout schema
-    for the 32 adult permanent teeth (Universal & FDI systems).
-    Used by frontend highlighters to map and visualize procedures on teeth.
-    """
     return record_controller.generate_tooth_chart_template()
 
 
 @router.post(
-    "/signature/upload",
+    "/signatures/upload",
     response_model=SignatureUploadResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Upload patient signature PNG (Base64)",
+    summary="Upload patient signature image",
 )
-def upload_signature_base64(
-    payload: SignatureUploadRequest,
-    _: User = Depends(get_current_user),
+async def upload_signature(
+    file: UploadFile = File(...),
+    _: User = Depends(require_staff),
 ):
-    """Saves a base64 encoded signature PNG and returns the static URL path."""
-    url = record_controller.save_signature_base64(payload.signature_base64)
-    return SignatureUploadResponse(signature_url=url)
+    url = await record_controller.save_signature_file(file)
+    return SignatureUploadResponse(
+        url=url,
+        filename=file.filename or "signature.png",
+        content_type=file.content_type or "image/png",
+    )
 
 
 @router.post(
-    "/signature/upload-file",
+    "/signatures/base64",
     response_model=SignatureUploadResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Upload patient signature image file (Multipart)",
+    summary="Save Base64 canvas signature",
 )
-async def upload_signature_file(
-    file: UploadFile = File(...),
-    _: User = Depends(get_current_user),
+def save_signature_base64_endpoint(
+    payload: SignatureUploadRequest,
+    _: User = Depends(require_staff),
 ):
-    """Accepts a multipart file upload for signatures."""
-    url = await record_controller.save_signature_file(file)
-    return SignatureUploadResponse(signature_url=url)
+    url = record_controller.save_signature_base64(payload.signature_data)
+    return SignatureUploadResponse(
+        url=url,
+        filename="signature.png",
+        content_type="image/png",
+    )
 
 
 @router.post(
@@ -74,17 +73,15 @@ async def upload_signature_file(
 )
 def create_treatment_record(
     data: TreatmentRecordCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff),
 ):
-    """
-    Adds a new clinical procedure entry to the patient's digital treatment ledger.
-    Captures procedure name, tooth number(s), agreed value of work, and patient signature.
-    """
     if data.doctor_id is None and current_user.role in (UserRole.DOCTOR, UserRole.ORTHODONTIST):
         data.doctor_id = current_user.id
 
-    return record_controller.create_treatment_record(db, data)
+    ip = request.client.host if request.client else None
+    return record_controller.create_treatment_record(db, data, actor_id=current_user.id, ip_address=ip)
 
 
 @router.get(
@@ -97,10 +94,6 @@ def get_treatment_record(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Retrieves full details of a specific treatment record including payment installments.
-    Accessible by clinic staff or the owning patient.
-    """
     record = record_controller.get_treatment_record_or_404(db, record_id)
     is_staff = current_user.role in (
         UserRole.ADMIN,
@@ -125,11 +118,12 @@ def get_treatment_record(
 def update_treatment_record(
     record_id: int,
     data: TreatmentRecordUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    current_user: User = Depends(require_staff),
 ):
-    """Update procedure details, tooth number, value of work, or signature."""
-    return record_controller.update_treatment_record(db, record_id, data)
+    ip = request.client.host if request.client else None
+    return record_controller.update_treatment_record(db, record_id, data, actor_id=current_user.id, ip_address=ip)
 
 
 @router.delete(
@@ -138,11 +132,12 @@ def update_treatment_record(
 )
 def delete_treatment_record(
     record_id: int,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    current_user: User = Depends(require_staff),
 ):
-    """Delete a treatment record from the ledger."""
-    return record_controller.delete_treatment_record(db, record_id)
+    ip = request.client.host if request.client else None
+    return record_controller.delete_treatment_record(db, record_id, actor_id=current_user.id, ip_address=ip)
 
 
 @router.post(
@@ -154,14 +149,12 @@ def delete_treatment_record(
 def create_payment_for_record(
     record_id: int,
     data: PaymentCreate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    current_user: User = Depends(require_staff),
 ):
-    """
-    Records downpayment or installment linked directly to a treatment record.
-    Immediately reduces remaining balance for that procedure.
-    """
-    return record_controller.create_payment(db, data, record_id_param=record_id)
+    ip = request.client.host if request.client else None
+    return record_controller.create_payment(db, data, record_id_param=record_id, actor_id=current_user.id, ip_address=ip)
 
 
 @router.post(
@@ -172,11 +165,12 @@ def create_payment_for_record(
 )
 def create_general_payment(
     data: PaymentCreate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    current_user: User = Depends(require_staff),
 ):
-    """Records a general payment or downpayment for a patient."""
-    return record_controller.create_payment(db, data)
+    ip = request.client.host if request.client else None
+    return record_controller.create_payment(db, data, actor_id=current_user.id, ip_address=ip)
 
 
 @router.get(
@@ -189,7 +183,6 @@ def get_payment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieve details of a payment transaction."""
     payment = record_controller.get_payment_or_404(db, payment_id)
     is_staff = current_user.role in (
         UserRole.ADMIN,
@@ -212,14 +205,10 @@ def get_payment(
 )
 def get_patient_ledger(
     patient_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Computes and returns the complete real-time financial ledger for a patient.
-    Aggregates all treatment rows, payment installments, total value of work,
-    total amount paid, and net balance due on the fly to prevent balance drift.
-    """
     resolved_patient_id = patient_id
     patient_user = db.query(User).filter(User.id == patient_id).first()
     if not patient_user:
@@ -244,4 +233,5 @@ def get_patient_ledger(
             detail="You do not have permission to view this patient's financial ledger.",
         )
 
-    return record_controller.compute_patient_ledger_summary(db, resolved_patient_id)
+    ip = request.client.host if request.client else None
+    return record_controller.compute_patient_ledger_summary(db, resolved_patient_id, actor_id=current_user.id, ip_address=ip)
