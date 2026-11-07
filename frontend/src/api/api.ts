@@ -1,15 +1,7 @@
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 
-// ---------------------------------------------------------------------------
-// Server Connection & Base URL Configuration
-// ---------------------------------------------------------------------------
-// In development, Vite proxy forwards requests (/auth, /doctors, etc.) to backend http://localhost:8000.
-// In production or custom env, VITE_API_BASE_URL can override the target.
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || ''
 
-// ---------------------------------------------------------------------------
-// Token Storage Helpers
-// ---------------------------------------------------------------------------
 export const TOKEN_KEYS = {
   ACCESS: 'access_token',
   REFRESH: 'refresh_token',
@@ -30,9 +22,6 @@ export const clearTokens = (): void => {
   localStorage.removeItem(TOKEN_KEYS.REFRESH)
 }
 
-// ---------------------------------------------------------------------------
-// Core Axios Client
-// ---------------------------------------------------------------------------
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
@@ -41,9 +30,6 @@ export const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// ---------------------------------------------------------------------------
-// Request Interceptor: Attach JWT Bearer Token
-// ---------------------------------------------------------------------------
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = getAccessToken()
@@ -55,9 +41,6 @@ apiClient.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error),
 )
 
-// ---------------------------------------------------------------------------
-// Response Interceptor: 401 Unauthorized Auto-Refresh Queue
-// ---------------------------------------------------------------------------
 let isRefreshing = false
 let failedQueue: Array<{
   resolve: (token: string) => void
@@ -81,7 +64,6 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Do not attempt refresh on login or refresh endpoints themselves
       if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh')) {
         return Promise.reject(error)
       }
@@ -137,9 +119,6 @@ apiClient.interceptors.response.use(
   },
 )
 
-// ---------------------------------------------------------------------------
-// WebSocket Connection Helper
-// ---------------------------------------------------------------------------
 export const getWebSocketUrl = (path: string = '/ws/chat'): string => {
   const token = getAccessToken()
   const tokenParam = token ? `?token=${encodeURIComponent(token)}` : ''
@@ -151,9 +130,8 @@ export const getWebSocketUrl = (path: string = '/ws/chat'): string => {
     return API_BASE_URL.replace('https://', 'wss://') + path + tokenParam
   }
 
-  // Relative to current host (Vite dev server proxy handles /ws to backend ws://localhost:8000)
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${window.location.host}${path}${tokenParam}`
+  return protocol + '//' + window.location.host + path + tokenParam
 }
 
 export default apiClient

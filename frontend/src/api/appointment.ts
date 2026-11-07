@@ -1,9 +1,6 @@
 import { apiClient } from './api'
 import type { AxiosResponse } from 'axios'
 
-// ===========================================================================
-// Colocated TypeScript Types & Contracts
-// ===========================================================================
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
 
@@ -27,8 +24,8 @@ export interface AppointmentResponse {
   patient?: AppointmentPatientSummary
   doctor_id: number
   doctor?: AppointmentDoctorSummary
-  start_time: string // ISO-8601 string
-  end_time: string // ISO-8601 string
+  start_time: string
+  end_time: string
   status: AppointmentStatus
   reason_for_visit: string | null
   notes: string | null
@@ -39,8 +36,8 @@ export interface AppointmentResponse {
 
 export interface AppointmentCreateRequest {
   doctor_id: number
-  start_time: string // ISO-8601 string
-  end_time: string // ISO-8601 string
+  start_time: string
+  end_time: string
   reason_for_visit?: string
   notes?: string
 }
@@ -66,60 +63,37 @@ export interface AppointmentQueryParams {
   doctor_id?: number
   patient_id?: number
   status?: AppointmentStatus
-  start_date?: string // YYYY-MM-DD
-  end_date?: string // YYYY-MM-DD
+  start_date?: string
+  end_date?: string
   skip?: number
   limit?: number
 }
 
-// ===========================================================================
-// Appointment Booking & Scheduling API Endpoints
-// ===========================================================================
 
 export const appointmentsApi = {
-  /**
-   * Query appointments with role-aware filtering.
-   * Patients view their own, doctors view their schedule, staff can filter by any parameter.
-   * Endpoint: GET /appointments/
-   */
+
   listAppointments(params?: AppointmentQueryParams): Promise<AxiosResponse<AppointmentResponse[]>> {
     return apiClient.get('/appointments/', { params })
   },
 
-  /**
-   * Book an appointment. Validates slot conflicts and doctor availability rules.
-   * Patients book for themselves; staff/admin can supply a patient_id.
-   * Endpoint: POST /appointments/
-   */
+
   createAppointment(
     payload: AppointmentCreateRequest | AppointmentAdminCreateRequest,
   ): Promise<AxiosResponse<AppointmentResponse>> {
     return apiClient.post('/appointments/', payload)
   },
 
-  /**
-   * Retrieve appointment details by ID.
-   * Accessible by the patient, the doctor, or staff.
-   * Endpoint: GET /appointments/{id}
-   */
+
   getAppointmentById(id: number): Promise<AxiosResponse<AppointmentResponse>> {
     return apiClient.get(`/appointments/${id}`)
   },
 
-  /**
-   * Update clinical notes, reason, or reschedule appointment time.
-   * Staff only.
-   * Endpoint: PATCH /appointments/{id}
-   */
+
   updateAppointment(id: number, payload: AppointmentUpdate): Promise<AxiosResponse<AppointmentResponse>> {
     return apiClient.patch(`/appointments/${id}`, payload)
   },
 
-  /**
-   * Transition appointment workflow status (confirmed, completed, cancelled, no_show).
-   * Staff or assigned doctor only.
-   * Endpoint: PATCH /appointments/{id}/status
-   */
+
   updateAppointmentStatus(
     id: number,
     status: AppointmentStatus,
@@ -131,11 +105,7 @@ export const appointmentsApi = {
     })
   },
 
-  /**
-   * Cancel an appointment with a cancellation reason.
-   * Can be initiated by patient (own appointment) or staff.
-   * Endpoint: POST /appointments/{id}/cancel
-   */
+
   cancelAppointment(id: number, reason?: string): Promise<AxiosResponse<AppointmentResponse>> {
     return apiClient.post(`/appointments/${id}/cancel`, null, {
       params: { reason },
@@ -144,4 +114,3 @@ export const appointmentsApi = {
 }
 
 export default appointmentsApi
-
