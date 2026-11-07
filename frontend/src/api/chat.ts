@@ -1,9 +1,6 @@
 import { apiClient, getWebSocketUrl } from './api'
 import type { AxiosResponse } from 'axios'
 
-// ===========================================================================
-// Colocated TypeScript Types & Contracts
-// ===========================================================================
 
 export interface ChatMessageResponse {
   id: number
@@ -27,12 +24,12 @@ export interface ConversationResponse {
 }
 
 export interface ConversationCreateRequest {
-  patient_id?: number // Required when staff initiates conversation; optional for patients
+  patient_id?: number
 }
 
 export interface MessageHistoryQueryParams {
-  limit?: number // default 50
-  before_id?: number // pagination cursor for loading earlier messages
+  limit?: number
+  before_id?: number
 }
 
 export interface ChatWebSocketOptions {
@@ -50,33 +47,19 @@ export interface ChatWebSocketClient {
   close: () => void
 }
 
-// ===========================================================================
-// Real-Time Chat & Messaging API Endpoints
-// ===========================================================================
 
 export const chatApi = {
-  /**
-   * List inbox conversations with real-time unread message counts.
-   * Patients see their own conversation; staff see all active patient chats.
-   * Endpoint: GET /chat/conversations
-   */
+
   listConversations(): Promise<AxiosResponse<ConversationResponse[]>> {
     return apiClient.get('/chat/conversations')
   },
 
-  /**
-   * Initiate a conversation between a patient and clinic staff.
-   * Endpoint: POST /chat/conversations
-   */
+
   createConversation(patientId?: number): Promise<AxiosResponse<ConversationResponse>> {
     return apiClient.post('/chat/conversations', { patient_id: patientId })
   },
 
-  /**
-   * Retrieve paginated message history for a conversation.
-   * Supports infinite scroll upwards via `before_id`.
-   * Endpoint: GET /chat/conversations/{conversationId}/history
-   */
+
   getConversationHistory(
     conversationId: number,
     params?: MessageHistoryQueryParams,
@@ -84,18 +67,12 @@ export const chatApi = {
     return apiClient.get(`/chat/conversations/${conversationId}/history`, { params })
   },
 
-  /**
-   * Mark all unread messages in a conversation as read.
-   * Endpoint: POST /chat/conversations/{conversationId}/read
-   */
+
   markAsRead(conversationId: number): Promise<AxiosResponse<{ message: string }>> {
     return apiClient.post(`/chat/conversations/${conversationId}/read`)
   },
 
-  /**
-   * Establish a bi-directional WebSocket connection to the backend (/ws/chat?token={jwt}).
-   * Includes automatic reconnection, JSON message parsing, and type-safe payload sender.
-   */
+
   createChatSocket(options: ChatWebSocketOptions = {}): ChatWebSocketClient {
     const {
       onMessage,
@@ -124,7 +101,7 @@ export const chatApi = {
             const data = JSON.parse(event.data) as ChatMessageResponse
             onMessage?.(data)
           } catch {
-            // Ignore non-JSON or ping/pong frame
+
           }
         }
 
@@ -173,4 +150,3 @@ export const chatApi = {
 }
 
 export default chatApi
-
