@@ -1,10 +1,38 @@
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 
 // ---------------------------------------------------------------------------
-// Axios Instance Configuration
+// Server Connection & Base URL Configuration
 // ---------------------------------------------------------------------------
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+// In development, Vite proxy forwards requests (/auth, /doctors, etc.) to backend http://localhost:8000.
+// In production or custom env, VITE_API_BASE_URL can override the target.
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || ''
 
+// ---------------------------------------------------------------------------
+// Token Storage Helpers
+// ---------------------------------------------------------------------------
+export const TOKEN_KEYS = {
+  ACCESS: 'access_token',
+  REFRESH: 'refresh_token',
+} as const
+
+export const getAccessToken = (): string | null => localStorage.getItem(TOKEN_KEYS.ACCESS)
+export const getRefreshToken = (): string | null => localStorage.getItem(TOKEN_KEYS.REFRESH)
+
+export const setTokens = (accessToken: string, refreshToken?: string): void => {
+  localStorage.setItem(TOKEN_KEYS.ACCESS, accessToken)
+  if (refreshToken) {
+    localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken)
+  }
+}
+
+export const clearTokens = (): void => {
+  localStorage.removeItem(TOKEN_KEYS.ACCESS)
+  localStorage.removeItem(TOKEN_KEYS.REFRESH)
+}
+
+// ---------------------------------------------------------------------------
+// Core Axios Client
+// ---------------------------------------------------------------------------
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
@@ -18,7 +46,7 @@ export const apiClient: AxiosInstance = axios.create({
 // ---------------------------------------------------------------------------
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('access_token')
+    const token = getAccessToken()
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -28,7 +56,7 @@ apiClient.interceptors.request.use(
 )
 
 // ---------------------------------------------------------------------------
-// Response Interceptor: Handle 401 Unauthorized & Token Refresh
+// Response Interceptor: 401 Unauthorized Auto-Refresh Queue
 // ---------------------------------------------------------------------------
 let isRefreshing = false
 let failedQueue: Array<{
@@ -53,12 +81,13 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Do not attempt refresh on login or refresh endpoints themselves
       if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh')) {
         return Promise.reject(error)
       }
 
       if (isRefreshing) {
-        return new Promise((resolve, reject) => {
+        return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         })
           .then((token) => {
@@ -73,11 +102,10 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const refreshToken = localStorage.getItem('refresh_token')
+      const refreshToken = getRefreshToken()
       if (!refreshToken) {
         isRefreshing = false
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
+        clearTokens()
         return Promise.reject(error)
       }
 
@@ -88,11 +116,7 @@ apiClient.interceptors.response.use(
         const newAccessToken = response.data.access_token
         const newRefreshToken = response.data.refresh_token
 
-        localStorage.setItem('access_token', newAccessToken)
-        if (newRefreshToken) {
-          localStorage.setItem('refresh_token', newRefreshToken)
-        }
-
+        setTokens(newAccessToken, newRefreshToken)
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`
         processQueue(null, newAccessToken)
 
@@ -102,8 +126,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest)
       } catch (refreshErr) {
         processQueue(refreshErr, null)
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
+        clearTokens()
         return Promise.reject(refreshErr)
       } finally {
         isRefreshing = false
@@ -115,170 +138,22 @@ apiClient.interceptors.response.use(
 )
 
 // ---------------------------------------------------------------------------
-// Domain API Modules
+// WebSocket Connection Helper
 // ---------------------------------------------------------------------------
+export const getWebSocketUrl = (path: string = '/ws/chat'): string => {
+  const token = getAccessToken()
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : ''
 
-// Authentication & Profile
-export const authApi = {
-  register: (payload: { full_name: string; username: string; email: string; phone?: string; password: string }) =>
-    apiClient.post('/auth/register', payload),
+  if (API_BASE_URL.startsWith('http://')) {
+    return API_BASE_URL.replace('http://', 'ws://') + path + tokenParam
+  }
+  if (API_BASE_URL.startsWith('https://')) {
+    return API_BASE_URL.replace('https://', 'wss://') + path + tokenParam
+  }
 
-  login: (payload: { identifier: string; password: string }) =>
-    apiClient.post('/auth/login', payload),
-
-  refresh: (refreshToken: string) =>
-    apiClient.post('/auth/refresh', { refresh_token: refreshToken }),
-
-  getMe: () =>
-    apiClient.get('/auth/me'),
-
-  createStaff: (payload: { full_name: string; username: string; email: string; phone?: string; password: string; role: string }) =>
-    apiClient.post('/users/staff', payload),
-
-  changePassword: (payload: { old_password: string; new_password: string }) =>
-    apiClient.post('/users/me/change-password', payload),
+  // Relative to current host (Vite dev server proxy handles /ws to backend ws://localhost:8000)
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}${path}${tokenParam}`
 }
 
-// Doctors & Availability
-export const doctorsApi = {
-  listPublicDoctors: () =>
-    apiClient.get('/doctors/'),
-
-  getDoctorById: (doctorId: number) =>
-    apiClient.get(`/doctors/${doctorId}`),
-
-  getDoctorAvailability: (doctorId: number, month?: string) =>
-    apiClient.get(`/doctors/${doctorId}/availability`, { params: { month } }),
-
-  getMyDoctorProfile: () =>
-    apiClient.get('/doctors/me/profile'),
-
-  updateMyDoctorProfile: (payload: Record<string, unknown>) =>
-    apiClient.patch('/doctors/me/profile', payload),
-
-  getMyAvailabilityRules: () =>
-    apiClient.get('/doctors/me/availability'),
-
-  setMyAvailabilityRules: (rules: Array<Record<string, unknown>>) =>
-    apiClient.put('/doctors/me/availability', { rules }),
-
-  createTimeOff: (payload: { start_datetime: string; end_datetime: string; reason?: string }) =>
-    apiClient.post('/doctors/me/time-off', payload),
-
-  listMyTimeOff: () =>
-    apiClient.get('/doctors/me/time-off'),
-}
-
-// Appointments
-export const appointmentsApi = {
-  listAppointments: (params?: { doctor_id?: number; patient_id?: number; status?: string; start_date?: string; end_date?: string }) =>
-    apiClient.get('/appointments/', { params }),
-
-  createAppointment: (payload: { doctor_id: number; start_time: string; end_time: string; reason_for_visit?: string; notes?: string }) =>
-    apiClient.post('/appointments/', payload),
-
-  getAppointmentById: (id: number) =>
-    apiClient.get(`/appointments/${id}`),
-
-  updateAppointmentStatus: (id: number, status: string, reason?: string) =>
-    apiClient.patch(`/appointments/${id}/status`, { status, cancellation_reason: reason }),
-
-  cancelAppointment: (id: number, reason?: string) =>
-    apiClient.post(`/appointments/${id}/cancel`, null, { params: { reason } }),
-}
-
-// Digital Patient Records & Financial Ledger
-export const recordsApi = {
-  getToothChartTemplate: () =>
-    apiClient.get('/records/tooth-chart/template'),
-
-  uploadSignatureFile: (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    return apiClient.post('/records/signatures/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-  },
-
-  saveSignatureBase64: (signatureData: string) =>
-    apiClient.post('/records/signatures/base64', { signature_data: signatureData }),
-
-  createTreatmentRecord: (payload: {
-    patient_id: number
-    doctor_id?: number
-    treatment_name: string
-    tooth_number?: string
-    value_of_work: number | string
-    date?: string
-    notes?: string
-    signature_url?: string
-    signature_base64?: string
-  }) => apiClient.post('/records/', payload),
-
-  getTreatmentRecord: (recordId: number) =>
-    apiClient.get(`/records/${recordId}`),
-
-  updateTreatmentRecord: (recordId: number, payload: Record<string, unknown>) =>
-    apiClient.patch(`/records/${recordId}`, payload),
-
-  deleteTreatmentRecord: (recordId: number) =>
-    apiClient.delete(`/records/${recordId}`),
-
-  createPaymentForRecord: (recordId: number, payload: { patient_id?: number; amount: number | string; method: string; receipt_no?: string; notes?: string }) =>
-    apiClient.post(`/records/${recordId}/payments`, payload),
-
-  createGeneralPayment: (payload: { patient_id: number; amount: number | string; method: string; receipt_no?: string; notes?: string }) =>
-    apiClient.post('/records/payments', payload),
-
-  getPatientLedger: (patientId: number) =>
-    apiClient.get(`/records/patient/${patientId}/ledger`),
-}
-
-// Live Chat & Conversations
-export const chatApi = {
-  listConversations: () =>
-    apiClient.get('/chat/conversations'),
-
-  createConversation: (patientId?: number) =>
-    apiClient.post('/chat/conversations', { patient_id: patientId }),
-
-  getConversationHistory: (conversationId: number, params?: { limit?: number; before_id?: number }) =>
-    apiClient.get(`/chat/conversations/${conversationId}/history`, { params }),
-
-  markAsRead: (conversationId: number) =>
-    apiClient.post(`/chat/conversations/${conversationId}/read`),
-}
-
-// Admin Audit Logging (DPA Compliance)
-export const auditApi = {
-  listLogs: (params?: { actor_id?: number; action?: string; resource?: string; date_from?: string; date_to?: string; page?: number; limit?: number }) =>
-    apiClient.get('/admin/audit/logs', { params }),
-
-  getLogById: (logId: number) =>
-    apiClient.get(`/admin/audit/logs/${logId}`),
-
-  purgeOldLogs: (olderThanDays: number = 365) =>
-    apiClient.delete('/admin/audit/purge', { params: { older_than_days: olderThanDays } }),
-}
-
-// Admin Dashboard Analytics
-export const analyticsApi = {
-  getOverview: () =>
-    apiClient.get('/admin/analytics/overview'),
-
-  getAppointmentsBreakdown: (months: number = 12) =>
-    apiClient.get('/admin/analytics/appointments', { params: { months } }),
-
-  getRevenueReport: (months: number = 12) =>
-    apiClient.get('/admin/analytics/revenue', { params: { months } }),
-}
-
-// Notifications
-export const notificationsApi = {
-  listLogs: (params?: { appointment_id?: number; type?: string; status?: string; skip?: number; limit?: number }) =>
-    apiClient.get('/notifications/logs', { params }),
-}
-
-// Export default Axios instance for custom queries
 export default apiClient
-
