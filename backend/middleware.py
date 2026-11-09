@@ -23,6 +23,7 @@ logging.basicConfig(
 
 
 _configured = settings.FRONTEND_URL.strip()
+_extra_origins = [o.strip() for o in getattr(settings, "CORS_ORIGINS", "").split(",") if o.strip()]
 
 ALLOWED_ORIGINS = list({
     _configured,
@@ -32,6 +33,7 @@ ALLOWED_ORIGINS = list({
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
     "http://127.0.0.1:3000",
+    *_extra_origins,
 })
 
 

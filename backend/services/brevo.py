@@ -312,8 +312,14 @@ class BrevoEmailService:
         Sends transactional email via Brevo v3 HTTP API.
         If BREVO_API_KEY is not configured or in test mode, gracefully simulates delivery.
         """
-        if not self.api_key or self.api_key.strip() == "" or self.api_key.startswith("test_"):
-
+        is_mock = (
+            getattr(settings, "BREVO_MOCK_MODE", False)
+            or not self.api_key
+            or self.api_key.strip() == ""
+            or self.api_key.startswith("test")
+            or self.api_key.startswith("mock")
+        )
+        if is_mock:
             simulated_id = f"sim-{uuid.uuid4().hex[:12]}"
             logger.info(
                 f"[BREVO SIMULATED] To: {recipient_email} | Subject: '{subject}' | MessageId: {simulated_id}"
@@ -322,7 +328,7 @@ class BrevoEmailService:
                 "success": True,
                 "status": "simulated",
                 "message_id": simulated_id,
-                "detail": "Email delivery simulated successfully (no active Brevo API key provided).",
+                "detail": "Email delivery simulated successfully (no active Brevo API key provided or mock mode active).",
             }
 
         headers = {

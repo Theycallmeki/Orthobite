@@ -1,10 +1,12 @@
 import base64
+import io
 import os
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from fastapi import HTTPException, UploadFile, status
+from PIL import Image
 from sqlalchemy.orm import Session
 
 from config.settings import settings
@@ -146,17 +148,46 @@ def compute_patient_ledger_summary(
     return summary
 
 
+ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP"}
+MAX_SIGNATURE_SIZE_BYTES = 5 * 1024 * 1024
+
+
+def _validate_image_bytes(data: bytes) -> str:
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Signature image data cannot be empty.",
+        )
+    if len(data) > MAX_SIGNATURE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Image size exceeds the maximum allowed limit of {MAX_SIGNATURE_SIZE_BYTES // (1024 * 1024)}MB.",
+        )
+    try:
+        image = Image.open(io.BytesIO(data))
+        image.verify()
+        fmt = (image.format or "").upper()
+        if fmt not in ALLOWED_IMAGE_FORMATS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported image format: '{fmt or 'unknown'}'. Allowed formats: PNG, JPEG, WEBP.",
+            )
+        return ".jpg" if fmt == "JPEG" else f".{fmt.lower()}"
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Corrupted or invalid image data: {str(e)}",
+        )
+
+
 def save_signature_base64(signature_data: str) -> str:
-    """
-    Decodes base64 PNG signature string from frontend canvas and saves to disk.
-    Returns the relative public URL path.
-    """
     if not signature_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Signature data cannot be empty.",
         )
-
 
     if "," in signature_data:
         _, base64_str = signature_data.split(",", 1)
@@ -171,28 +202,29 @@ def save_signature_base64(signature_data: str) -> str:
             detail=f"Invalid base64 signature encoding: {e}",
         )
 
+    ext = _validate_image_bytes(decoded_bytes)
+
     os.makedirs(settings.SIGNATURES_DIR, exist_ok=True)
-    filename = f"sig_{uuid.uuid4().hex}.png"
+    filename = f"sig_{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(settings.SIGNATURES_DIR, filename)
 
     with open(filepath, "wb") as f:
         f.write(decoded_bytes)
 
-
     return f"/{settings.SIGNATURES_DIR}/{filename}".replace("\\", "/")
 
 
 async def save_signature_file(file: UploadFile) -> str:
-    """Saves uploaded multipart signature image file to disk."""
     if not file.filename:
-        raise HTTPException(status_code=400, detail="Uploaded signature has no filename.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded signature has no filename.")
 
-    ext = os.path.splitext(file.filename)[1].lower() or ".png"
+    content = await file.read()
+    ext = _validate_image_bytes(content)
+
     os.makedirs(settings.SIGNATURES_DIR, exist_ok=True)
     filename = f"sig_{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(settings.SIGNATURES_DIR, filename)
 
-    content = await file.read()
     with open(filepath, "wb") as f:
         f.write(content)
 

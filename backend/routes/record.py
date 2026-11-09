@@ -43,6 +43,7 @@ async def upload_signature(
     url = await record_controller.save_signature_file(file)
     return SignatureUploadResponse(
         url=url,
+        signature_url=url,
         filename=file.filename or "signature.png",
         content_type=file.content_type or "image/png",
     )
@@ -57,9 +58,11 @@ def save_signature_base64_endpoint(
     payload: SignatureUploadRequest,
     _: User = Depends(require_staff),
 ):
-    url = record_controller.save_signature_base64(payload.signature_data)
+    data_str = payload.signature_data or payload.signature_base64 or ""
+    url = record_controller.save_signature_base64(data_str)
     return SignatureUploadResponse(
         url=url,
+        signature_url=url,
         filename="signature.png",
         content_type="image/png",
     )
