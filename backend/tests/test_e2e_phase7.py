@@ -1,5 +1,7 @@
 import sys
 import os
+import io
+import base64
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datetime import date, datetime, timedelta
@@ -225,6 +227,14 @@ class TestPhase3Appointments:
         assert resp.status_code in (400, 409)
 
 
+VALID_PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x02\x00\x00\x00\x02"
+    b"\x08\x06\x00\x00\x00r\xb6\r$\x00\x00\x00\x14IDATx\x9cc\xfc\xcf\xc0"
+    b"\xf0\x9f\x81\x81\x81\x81\x89\x01\n\x00\x1f\x17\x02\x02O\x94\xce\xbe"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
 class TestPhase4Notifications:
     def test_notification_log_accessible(self, client):
         resp = client.get(
@@ -234,9 +244,51 @@ class TestPhase4Notifications:
         assert resp.status_code == 200
         data = resp.json()
         assert "logs" in data or isinstance(data, list)
+        logs = data.get("logs", data) if isinstance(data, dict) else data
+        assert any(l.get("status") in ("simulated", "sent") for l in logs)
 
 
 class TestPhase5Records:
+    def test_signature_upload_valid_image(self, client):
+        resp = client.post(
+            "/records/signatures/upload",
+            files={"file": ("signature.png", io.BytesIO(VALID_PNG_BYTES), "image/png")},
+            headers={"Authorization": f"Bearer {state['admin_token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "url" in data
+        assert data["url"].startswith("/uploads/signatures/")
+
+    def test_signature_upload_invalid_bytes_rejected(self, client):
+        resp = client.post(
+            "/records/signatures/upload",
+            files={"file": ("bad.png", io.BytesIO(b"NOT_A_VALID_IMAGE_FILE"), "image/png")},
+            headers={"Authorization": f"Bearer {state['admin_token']}"},
+        )
+        assert resp.status_code == 400
+
+    def test_signature_base64_valid(self, client):
+        b64 = "data:image/png;base64," + base64.b64encode(VALID_PNG_BYTES).decode("utf-8")
+        resp = client.post(
+            "/records/signatures/base64",
+            json={"signature_data": b64},
+            headers={"Authorization": f"Bearer {state['admin_token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "url" in data
+        assert data["url"].startswith("/uploads/signatures/")
+
+    def test_signature_base64_invalid_rejected(self, client):
+        b64 = "data:image/png;base64," + base64.b64encode(b"CORRUPTED_NON_IMAGE_DATA").decode("utf-8")
+        resp = client.post(
+            "/records/signatures/base64",
+            json={"signature_data": b64},
+            headers={"Authorization": f"Bearer {state['admin_token']}"},
+        )
+        assert resp.status_code == 400
+
     def test_create_treatment_record(self, client):
         resp = client.post(
             "/records/",

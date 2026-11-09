@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
 
     FRONTEND_URL: str = "http://localhost:5173"
+    CORS_ORIGINS: str = ""
 
 
     UPLOAD_DIR: str = "uploads"
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
 
 
     BREVO_API_KEY: str = ""
+    BREVO_MOCK_MODE: bool = False
     BREVO_SENDER_EMAIL: str = "reminders@orthobite.com"
     BREVO_SENDER_NAME: str = "OrthoBite Dental Clinic"
 

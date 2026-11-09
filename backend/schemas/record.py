@@ -101,12 +101,23 @@ class PatientLedgerSummary(BaseModel):
 
 
 class SignatureUploadRequest(BaseModel):
-    signature_base64: str = Field(..., description="Base64 encoded data URI (data:image/png;base64,...)")
+    signature_data: Optional[str] = Field(None, description="Base64 encoded data URI or string")
+    signature_base64: Optional[str] = Field(None, description="Base64 encoded data URI or string")
 
 
 class SignatureUploadResponse(BaseModel):
-    signature_url: str
+    url: str
+    signature_url: Optional[str] = None
+    filename: str = "signature.png"
+    content_type: str = "image/png"
     message: str = "Signature uploaded successfully."
+
+    def __init__(self, **data):
+        if "url" in data and "signature_url" not in data:
+            data["signature_url"] = data["url"]
+        elif "signature_url" in data and "url" not in data:
+            data["url"] = data["signature_url"]
+        super().__init__(**data)
 
 
 class ToothMetadata(BaseModel):
