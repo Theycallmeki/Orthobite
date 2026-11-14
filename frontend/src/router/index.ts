@@ -2,15 +2,8 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AuthLayout from '@/layouts/AuthLayout.vue'
 import AppLayout from '@/layouts/AppLayout.vue'
-
-const AuthPlaceholder = {
-  template: `
-    <div class="text-center py-4">
-      <h2 class="text-lg font-bold text-slate-900 mb-1">Authentication</h2>
-      <p class="text-xs text-slate-500">Form will mount here.</p>
-    </div>
-  `,
-}
+import LoginView from '@/views/auth/LoginView.vue'
+import RegisterView from '@/views/auth/RegisterView.vue'
 
 const PortalPlaceholder = {
   template: `
@@ -45,13 +38,13 @@ const routes: RouteRecordRaw[] = [
       {
         path: '/login',
         name: 'login',
-        component: AuthPlaceholder,
+        component: LoginView,
         meta: { guestOnly: true },
       },
       {
         path: '/register',
         name: 'register',
-        component: AuthPlaceholder,
+        component: RegisterView,
         meta: { guestOnly: true },
       },
     ],
