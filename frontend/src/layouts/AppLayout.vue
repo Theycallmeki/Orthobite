@@ -1,0 +1,177 @@
+<script setup lang="ts">
+import { computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
+import {
+  Stethoscope,
+  Calendar,
+  Clock,
+  BookOpen,
+  MessageSquare,
+  BarChart3,
+  ShieldCheck,
+  ClipboardList,
+  LogOut,
+  User,
+} from 'lucide-vue-next'
+
+const authStore = useAuthStore()
+const chatStore = useChatStore()
+const router = useRouter()
+const route = useRoute()
+
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    chatStore.connectWebSocket()
+    chatStore.fetchConversations().catch(() => {})
+  }
+})
+
+const navLinks = computed(() => {
+  const links: Array<{ name: string; path: string; icon: typeof Calendar; badge?: number }> = []
+
+  if (authStore.isPatient) {
+    links.push(
+      { name: 'Doctors', path: '/portal', icon: User },
+      { name: 'Book Visit', path: '/portal/book', icon: Calendar },
+      { name: 'My Visits', path: '/portal/appointments', icon: Clock },
+      { name: 'Treatment & Ledger', path: '/portal/records', icon: BookOpen },
+      {
+        name: 'Live Chat',
+        path: '/portal/chat',
+        icon: MessageSquare,
+        badge: chatStore.totalUnreadCount,
+      },
+    )
+  } else if (authStore.isDoctor || authStore.isSecretary) {
+    links.push(
+      { name: 'Appointments', path: '/clinic/appointments', icon: Calendar },
+      { name: 'Patient Records', path: '/clinic/records', icon: ClipboardList },
+      {
+        name: 'Live Chat',
+        path: '/portal/chat',
+        icon: MessageSquare,
+        badge: chatStore.totalUnreadCount,
+      },
+    )
+  } else if (authStore.isAdmin) {
+    links.push(
+      { name: 'Analytics', path: '/admin/analytics', icon: BarChart3 },
+      { name: 'Audit Logs', path: '/admin/audit', icon: ShieldCheck },
+      { name: 'Appointments', path: '/clinic/appointments', icon: Calendar },
+      { name: 'Patient Records', path: '/clinic/records', icon: ClipboardList },
+      {
+        name: 'Live Chat',
+        path: '/portal/chat',
+        icon: MessageSquare,
+        badge: chatStore.totalUnreadCount,
+      },
+    )
+  }
+
+  return links
+})
+
+function handleLogout() {
+  chatStore.disconnectWebSocket()
+  authStore.logout()
+  router.push('/login')
+}
+</script>
+
+<template>
+  <div class="min-h-screen bg-slate-50 flex flex-col text-slate-800">
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <div class="flex items-center gap-8">
+            <router-link to="/" class="flex items-center gap-2">
+              <div class="w-9 h-9 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-xs">
+                <Stethoscope class="w-5 h-5" />
+              </div>
+              <span class="text-xl font-bold tracking-tight text-slate-900">
+                Ortho<span class="text-teal-600">Bite</span>
+              </span>
+            </router-link>
+
+            <nav class="hidden md:flex items-center gap-1">
+              <router-link
+                v-for="link in navLinks"
+                :key="link.path"
+                :to="link.path"
+                class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                :class="route.path === link.path
+                  ? 'bg-teal-50 text-teal-700 font-semibold'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'"
+              >
+                <component :is="link.icon" class="w-4 h-4" />
+                <span>{{ link.name }}</span>
+                <span
+                  v-if="link.badge && link.badge > 0"
+                  class="ml-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-rose-500 rounded-full"
+                >
+                  {{ link.badge > 99 ? '99+' : link.badge }}
+                </span>
+              </router-link>
+            </nav>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 font-semibold text-xs">
+                {{ authStore.user?.full_name?.charAt(0) || 'U' }}
+              </div>
+              <div class="hidden sm:block text-left">
+                <div class="text-sm font-medium text-slate-900 leading-none">
+                  {{ authStore.user?.full_name }}
+                </div>
+                <div class="text-xs uppercase font-bold text-teal-600 mt-1">
+                  {{ authStore.role }}
+                </div>
+              </div>
+            </div>
+
+            <button
+              @click="handleLogout"
+              class="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+              title="Sign Out"
+            >
+              <LogOut class="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <nav class="md:hidden border-t border-slate-100 px-4 py-2 flex items-center justify-around overflow-x-auto">
+        <router-link
+          v-for="link in navLinks"
+          :key="link.path"
+          :to="link.path"
+          class="flex flex-col items-center gap-1 py-1 px-2 rounded-md text-xs font-medium"
+          :class="route.path === link.path ? 'text-teal-700 font-semibold' : 'text-slate-600'"
+        >
+          <div class="relative">
+            <component :is="link.icon" class="w-5 h-5" />
+            <span
+              v-if="link.badge && link.badge > 0"
+              class="absolute -top-1 -right-2 w-4 h-4 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center"
+            >
+              {{ link.badge }}
+            </span>
+          </div>
+          <span class="text-[11px]">{{ link.name }}</span>
+        </router-link>
+      </nav>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <router-view />
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+      &copy; {{ new Date().getFullYear() }} OrthoBite Orthodontics. All rights reserved.
+    </footer>
+  </div>
+</template>
+
