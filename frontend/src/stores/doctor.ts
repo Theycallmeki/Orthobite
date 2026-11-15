@@ -24,9 +24,19 @@ export const useDoctorStore = defineStore('doctor', () => {
   const isLoading = ref<boolean>(false)
   const error = ref<string | null>(null)
 
-  const availabilitySlots = computed<Record<string, string[]>>(
-    () => availability.value?.available_slots || {},
-  )
+  const availabilitySlots = computed<Record<string, string[]>>(() => {
+    if (availability.value?.available_slots) {
+      return availability.value.available_slots
+    }
+    if (availability.value?.days) {
+      const map: Record<string, string[]> = {}
+      for (const day of availability.value.days) {
+        map[day.date] = day.slots.filter((s) => s.is_available).map((s) => s.formatted_time)
+      }
+      return map
+    }
+    return {}
+  })
 
   const activeDoctors = computed<DoctorPublicResponse[]>(() =>
     doctors.value.filter((d) => d.is_accepting_patients),

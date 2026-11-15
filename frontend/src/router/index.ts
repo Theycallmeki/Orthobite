@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/AppLayout.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import DoctorCarouselView from '@/views/patient/DoctorCarouselView.vue'
+import BookAppointmentView from '@/views/patient/BookAppointmentView.vue'
 
 const PortalPlaceholder = {
   template: `
@@ -63,7 +64,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'book',
         name: 'portal-book',
-        component: PortalPlaceholder,
+        component: BookAppointmentView,
       },
       {
         path: 'appointments',

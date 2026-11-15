@@ -15,12 +15,27 @@ export interface DoctorPublicResponse {
   is_accepting_patients: boolean
 }
 
+export interface TimeSlot {
+  start_time: string
+  end_time: string
+  formatted_time: string
+  is_available: boolean
+}
+
+export interface DayAvailability {
+  date: string
+  day_of_week: number
+  day_name: string
+  slots: TimeSlot[]
+}
+
 export interface DoctorAvailabilityResponse {
   doctor_id: number
   doctor_name: string
   month: string
-  slot_duration_minutes: number
-  available_slots: Record<string, string[]>
+  days: DayAvailability[]
+  slot_duration_minutes?: number
+  available_slots?: Record<string, string[]>
 }
 
 export interface AvailabilityRule {
