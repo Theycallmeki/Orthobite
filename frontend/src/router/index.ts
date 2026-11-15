@@ -4,6 +4,7 @@ import AuthLayout from '@/layouts/AuthLayout.vue'
 import AppLayout from '@/layouts/AppLayout.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import RegisterView from '@/views/auth/RegisterView.vue'
+import DoctorCarouselView from '@/views/patient/DoctorCarouselView.vue'
 
 const PortalPlaceholder = {
   template: `
@@ -57,7 +58,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'portal-dashboard',
-        component: PortalPlaceholder,
+        component: DoctorCarouselView,
       },
       {
         path: 'book',
