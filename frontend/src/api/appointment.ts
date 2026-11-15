@@ -32,6 +32,8 @@ export interface AppointmentResponse {
   cancellation_reason: string | null
   created_at: string
   updated_at?: string | null
+  formatted_date?: string | null
+  formatted_time?: string | null
 }
 
 export interface AppointmentCreateRequest {
