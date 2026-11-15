@@ -6,6 +6,8 @@ import LoginView from '@/views/auth/LoginView.vue'
 import RegisterView from '@/views/auth/RegisterView.vue'
 import DoctorCarouselView from '@/views/patient/DoctorCarouselView.vue'
 import BookAppointmentView from '@/views/patient/BookAppointmentView.vue'
+import MyAppointmentsView from '@/views/patient/MyAppointmentsView.vue'
+import TreatmentBookletView from '@/views/patient/TreatmentBookletView.vue'
 
 const PortalPlaceholder = {
   template: `
@@ -69,12 +71,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'appointments',
         name: 'portal-appointments',
-        component: PortalPlaceholder,
+        component: MyAppointmentsView,
       },
       {
         path: 'records',
         name: 'portal-records',
-        component: PortalPlaceholder,
+        component: TreatmentBookletView,
       },
       {
         path: 'chat',
