@@ -65,6 +65,29 @@ def book_appointment(
 
 
 @router.get(
+    "/",
+    response_model=List[AppointmentResponse],
+    summary="List appointments based on caller role",
+)
+def list_appointments_root(
+    status_filter: Optional[AppointmentStatus] = Query(None, alias="status"),
+    date_filter: Optional[date] = Query(None, alias="date"),
+    doctor_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role == UserRole.PATIENT:
+        return appointment_controller.get_patient_appointments(db, current_user.id, status_filter=status_filter)
+    elif current_user.role in (UserRole.DOCTOR, UserRole.ORTHODONTIST):
+        doc_prof = doctor_controller.get_or_create_doctor_profile_for_user(db, current_user)
+        res = appointment_controller.list_secretary_appointments(db, target_date=date_filter, doctor_id=doc_prof.id, status_filter=status_filter)
+        return res.appointments
+    else:
+        res = appointment_controller.list_secretary_appointments(db, target_date=date_filter, doctor_id=doctor_id, status_filter=status_filter)
+        return res.appointments
+
+
+@router.get(
     "/me",
     response_model=List[AppointmentResponse],
     summary="Patient view of upcoming and past visits",
