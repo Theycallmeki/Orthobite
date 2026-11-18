@@ -9,6 +9,7 @@ import BookAppointmentView from '@/views/patient/BookAppointmentView.vue'
 import MyAppointmentsView from '@/views/patient/MyAppointmentsView.vue'
 import TreatmentBookletView from '@/views/patient/TreatmentBookletView.vue'
 import ChatView from '@/views/chat/ChatView.vue'
+import AppointmentsScheduleView from '@/views/clinic/AppointmentsScheduleView.vue'
 
 const PortalPlaceholder = {
   template: `
@@ -99,7 +100,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'appointments',
         name: 'clinic-appointments',
-        component: PortalPlaceholder,
+        component: AppointmentsScheduleView,
       },
       {
         path: 'records',
