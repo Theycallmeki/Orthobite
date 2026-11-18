@@ -113,8 +113,12 @@ export const useChatStore = defineStore('chat', () => {
     error.value = null
     try {
       const response = await chatApi.listConversations()
-      conversations.value = response.data
-      return response.data
+      const data = response.data as unknown
+      const list = Array.isArray(data)
+        ? (data as ConversationResponse[])
+        : (data as { conversations?: ConversationResponse[] })?.conversations || []
+      conversations.value = list
+      return list
     } catch (err: unknown) {
       error.value = extractError(err, 'Failed to load conversations')
       throw err
@@ -150,7 +154,10 @@ export const useChatStore = defineStore('chat', () => {
     error.value = null
     try {
       const response = await chatApi.getConversationHistory(conversationId, params)
-      const incoming = response.data
+      const data = response.data as unknown
+      const incoming = Array.isArray(data)
+        ? (data as ChatMessageResponse[])
+        : (data as { messages?: ChatMessageResponse[] })?.messages || []
       if (params?.before_id && messages.value[conversationId]) {
         const existingIds = new Set(messages.value[conversationId].map((m) => m.id))
         const older = incoming.filter((m) => !existingIds.has(m.id))

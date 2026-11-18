@@ -8,6 +8,7 @@ import DoctorCarouselView from '@/views/patient/DoctorCarouselView.vue'
 import BookAppointmentView from '@/views/patient/BookAppointmentView.vue'
 import MyAppointmentsView from '@/views/patient/MyAppointmentsView.vue'
 import TreatmentBookletView from '@/views/patient/TreatmentBookletView.vue'
+import ChatView from '@/views/chat/ChatView.vue'
 
 const PortalPlaceholder = {
   template: `
@@ -56,32 +57,36 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/portal',
     component: AppLayout,
-    meta: { requiresAuth: true, roles: ['patient', 'admin'] },
+    meta: { requiresAuth: true, roles: ['patient', 'doctor', 'orthodontist', 'secretary', 'admin'] },
     children: [
       {
         path: '',
         name: 'portal-dashboard',
         component: DoctorCarouselView,
+        meta: { roles: ['patient', 'admin'] },
       },
       {
         path: 'book',
         name: 'portal-book',
         component: BookAppointmentView,
+        meta: { roles: ['patient', 'admin'] },
       },
       {
         path: 'appointments',
         name: 'portal-appointments',
         component: MyAppointmentsView,
+        meta: { roles: ['patient', 'admin'] },
       },
       {
         path: 'records',
         name: 'portal-records',
         component: TreatmentBookletView,
+        meta: { roles: ['patient', 'admin'] },
       },
       {
         path: 'chat',
         name: 'portal-chat',
-        component: PortalPlaceholder,
+        component: ChatView,
         meta: { requiresAuth: true },
       },
     ],
@@ -100,6 +105,12 @@ const routes: RouteRecordRaw[] = [
         path: 'records',
         name: 'clinic-records',
         component: PortalPlaceholder,
+      },
+      {
+        path: 'chat',
+        name: 'clinic-chat',
+        component: ChatView,
+        meta: { requiresAuth: true },
       },
     ],
   },

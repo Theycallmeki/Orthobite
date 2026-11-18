@@ -93,9 +93,10 @@ function getCanvasCoordinates(e: MouseEvent | TouchEvent): Point | null {
   let clientY = 0
 
   if ('touches' in e) {
-    if (e.touches.length === 0) return null
-    clientX = e.touches[0].clientX
-    clientY = e.touches[0].clientY
+    const touch = e.touches[0]
+    if (!touch) return null
+    clientX = touch.clientX
+    clientY = touch.clientY
   } else {
     clientX = e.clientX
     clientY = e.clientY
@@ -176,26 +177,33 @@ function draw(e: MouseEvent | TouchEvent) {
 
   if (points.length >= 3) {
     const len = points.length
+    const p0 = points[len - 3]
     const p1 = points[len - 2]
     const p2 = points[len - 1]
-    const midPoint = {
-      x: (p1.x + p2.x) / 2,
-      y: (p1.y + p2.y) / 2,
-    }
+    if (p0 && p1 && p2) {
+      const midPoint = {
+        x: (p1.x + p2.x) / 2,
+        y: (p1.y + p2.y) / 2,
+      }
 
-    ctx.beginPath()
-    const prevMid = {
-      x: (points[len - 3].x + p1.x) / 2,
-      y: (points[len - 3].y + p1.y) / 2,
+      ctx.beginPath()
+      const prevMid = {
+        x: (p0.x + p1.x) / 2,
+        y: (p0.y + p1.y) / 2,
+      }
+      ctx.moveTo(prevMid.x, prevMid.y)
+      ctx.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y)
+      ctx.stroke()
     }
-    ctx.moveTo(prevMid.x, prevMid.y)
-    ctx.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y)
-    ctx.stroke()
   } else if (points.length === 2) {
-    ctx.beginPath()
-    ctx.moveTo(points[0].x, points[0].y)
-    ctx.lineTo(points[1].x, points[1].y)
-    ctx.stroke()
+    const p0 = points[0]
+    const p1 = points[1]
+    if (p0 && p1) {
+      ctx.beginPath()
+      ctx.moveTo(p0.x, p0.y)
+      ctx.lineTo(p1.x, p1.y)
+      ctx.stroke()
+    }
   }
 
   if (!hasSignature.value) {
@@ -240,24 +248,36 @@ function redraw() {
     ctx.fillStyle = stroke.color
 
     if (pts.length === 1) {
-      ctx.beginPath()
-      ctx.arc(pts[0].x, pts[0].y, stroke.width / 2, 0, Math.PI * 2)
-      ctx.fill()
+      const pt0 = pts[0]
+      if (pt0) {
+        ctx.beginPath()
+        ctx.arc(pt0.x, pt0.y, stroke.width / 2, 0, Math.PI * 2)
+        ctx.fill()
+      }
       continue
     }
 
+    const firstPt = pts[0]
+    if (!firstPt) continue
+
     ctx.beginPath()
-    ctx.moveTo(pts[0].x, pts[0].y)
+    ctx.moveTo(firstPt.x, firstPt.y)
 
     for (let i = 1; i < pts.length - 1; i++) {
-      const midX = (pts[i].x + pts[i + 1].x) / 2
-      const midY = (pts[i].y + pts[i + 1].y) / 2
-      ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY)
+      const curr = pts[i]
+      const next = pts[i + 1]
+      if (curr && next) {
+        const midX = (curr.x + next.x) / 2
+        const midY = (curr.y + next.y) / 2
+        ctx.quadraticCurveTo(curr.x, curr.y, midX, midY)
+      }
     }
 
     const last = pts[pts.length - 1]
-    ctx.lineTo(last.x, last.y)
-    ctx.stroke()
+    if (last) {
+      ctx.lineTo(last.x, last.y)
+      ctx.stroke()
+    }
   }
 
   const hasStrokes = strokes.value.length > 0

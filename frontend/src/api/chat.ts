@@ -7,6 +7,7 @@ export interface ChatMessageResponse {
   conversation_id: number
   sender_id: number
   sender_name?: string
+  sender_role?: string
   content: string
   is_read: boolean
   created_at: string
@@ -19,8 +20,22 @@ export interface ConversationResponse {
   secretary_id: number | null
   secretary_name?: string
   updated_at: string
-  last_message?: string
+  last_message?: string | ChatMessageResponse | null
   unread_count?: number
+}
+
+export interface ConversationListResponse {
+  conversations: ConversationResponse[]
+  total_unread: number
+}
+
+export interface ChatHistoryResponse {
+  conversation_id: number
+  messages: ChatMessageResponse[]
+  total_count: number
+  page: number
+  page_size: number
+  has_more: boolean
 }
 
 export interface ConversationCreateRequest {
@@ -98,10 +113,13 @@ export const chatApi = {
 
         ws.onmessage = (event) => {
           try {
-            const data = JSON.parse(event.data) as ChatMessageResponse
-            onMessage?.(data)
+            const raw = JSON.parse(event.data)
+            if (raw.type === 'new_message' && raw.message) {
+              onMessage?.(raw.message as ChatMessageResponse)
+            } else if (raw.id && raw.conversation_id && raw.content) {
+              onMessage?.(raw as ChatMessageResponse)
+            }
           } catch {
-
           }
         }
 
@@ -116,7 +134,6 @@ export const chatApi = {
           }
         }
       } catch (err) {
-        console.error('WebSocket connection error:', err)
         if (!intentionallyClosed && autoReconnect) {
           reconnectTimeout = setTimeout(connect, reconnectIntervalMs)
         }
@@ -131,9 +148,7 @@ export const chatApi = {
       },
       send(payload: { conversation_id: number; content: string }) {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(payload))
-        } else {
-          console.warn('Chat WebSocket is not open. ReadyState:', ws?.readyState)
+          ws.send(JSON.stringify({ type: 'send_message', ...payload }))
         }
       },
       close() {
