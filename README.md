@@ -1,6 +1,6 @@
-# OrthoBite Orthodontics Management Platform
+# XXX Orthodontics Management Platform 
 
-OrthoBite is a enterprise-grade clinical orthodontics management platform engineered with a **FastAPI** backend and a modern **Vue 3** frontend. The system provides real-time appointment scheduling, doctor availability rule generation, electronic treatment records with interactive 32-tooth dental charting, patient signature capture, zero-drift financial installment ledgers, and secure role-based access control.
+XXX is a enterprise-grade clinical orthodontics management platform engineered with a **FastAPI** backend and a modern **Vue 3** frontend. The system provides real-time appointment scheduling, doctor availability rule generation, electronic treatment records with interactive 32-tooth dental charting, patient signature capture, zero-drift financial installment ledgers, and secure role-based access control.
 
 ---
 
