@@ -1,6 +1,7 @@
 from datetime import date as py_date, datetime as py_datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from models.record import PaymentMethod
@@ -20,6 +21,10 @@ class PaymentCreate(BaseModel):
     method: PaymentMethod = Field(PaymentMethod.CASH, description="Method: Cash, GCash, Card, Bank Transfer")
     receipt_no: Optional[str] = Field(None, max_length=100, description="Receipt or reference number")
     notes: Optional[str] = Field(None, description="Optional billing or cashier notes")
+    consent_signature_base64: Optional[str] = Field(None, max_length=7_000_000)
+    reuse_consent_payment_id: Optional[int] = Field(None, gt=0)
+    reuse_consent_confirmed: bool = False
+    payment_request_id: Optional[UUID] = None
 
 
 class PaymentResponse(BaseModel):
@@ -33,6 +38,7 @@ class PaymentResponse(BaseModel):
     method: PaymentMethod
     receipt_no: Optional[str] = None
     notes: Optional[str] = None
+    has_consent: bool = False
     created_at: py_datetime
 
 

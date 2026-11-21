@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import DoctorAvailabilityCalendar from '@/components/DoctorAvailabilityCalendar.vue'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAppointmentStore } from '@/stores/appointment'
 import type { DoctorPublicResponse, DayAvailability, TimeSlot } from '@/api/doctor'
@@ -36,6 +37,7 @@ const notes = ref<string>('')
 const isSubmitting = ref<boolean>(false)
 const bookingSuccessData = ref<AppointmentResponse | null>(null)
 const showDoctorPicker = ref<boolean>(false)
+const consultationFeeFormat = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 
 const commonReasons = [
   'Orthodontic Consultation',
@@ -209,7 +211,7 @@ function handleBookAnother() {
 
 <template>
   <div class="max-w-6xl mx-auto space-y-8 pb-12">
-    <div>
+    <div class="app-panel app-page-heading">
       <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
         Book an Orthodontic Appointment
       </h1>
@@ -273,7 +275,7 @@ function handleBookAnother() {
 
     <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <div class="lg:col-span-8 space-y-6">
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
+        <div class="app-panel p-6">
           <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
             <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
               <Stethoscope class="w-5 h-5 text-teal-600" />
@@ -312,7 +314,7 @@ function handleBookAnother() {
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-bold text-slate-900 truncate">{{ doc.full_name }}</p>
                 <p class="text-[11px] text-teal-700 truncate font-medium">{{ doc.specialty }}</p>
-                <p class="text-[11px] text-slate-500">${{ Number(doc.consultation_fee).toFixed(2) }} fee</p>
+                <p class="text-[11px] text-slate-500">{{ consultationFeeFormat.format(Number(doc.consultation_fee)) }} fee</p>
               </div>
             </div>
           </div>
@@ -342,7 +344,7 @@ function handleBookAnother() {
 
             <div class="text-right sm:border-l sm:border-slate-200 sm:pl-4">
               <span class="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Fee</span>
-              <span class="text-lg font-extrabold text-teal-700">${{ Number(doctorStore.selectedDoctor.consultation_fee).toFixed(2) }}</span>
+              <span class="text-lg font-extrabold text-teal-700">{{ consultationFeeFormat.format(Number(doctorStore.selectedDoctor.consultation_fee)) }}</span>
             </div>
           </div>
 
@@ -352,7 +354,7 @@ function handleBookAnother() {
           </div>
         </div>
 
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div class="app-panel p-6 space-y-6">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <Calendar class="w-5 h-5 text-teal-600" />
@@ -402,47 +404,18 @@ function handleBookAnother() {
           </div>
 
           <div v-else class="space-y-5">
-            <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-              <button
-                v-for="day in availableDays"
-                :key="day.date"
-                type="button"
-                @click="handleSelectDay(day.date)"
-                :class="[
-                  'flex flex-col items-center justify-center min-w-16 py-3 px-2 rounded-2xl border text-center transition cursor-pointer',
-                  selectedDate === day.date
-                    ? 'border-teal-600 bg-teal-600 text-white shadow-md shadow-teal-600/20'
-                    : day.slots.some(s => s.is_available)
-                      ? 'border-slate-200 bg-white hover:border-teal-300 text-slate-700'
-                      : 'border-slate-100 bg-slate-50 text-slate-300 opacity-60'
-                ]"
-              >
-                <span class="text-[11px] font-medium uppercase tracking-wider">
-                  {{ day.day_name.slice(0, 3) }}
-                </span>
-                <span class="text-base font-extrabold my-0.5">
-                  {{ day.date.split('-')[2] }}
-                </span>
-                <span
-                  :class="[
-                    'text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1',
-                    selectedDate === day.date
-                      ? 'bg-teal-700 text-teal-100'
-                      : day.slots.filter(s => s.is_available).length > 0
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-slate-100 text-slate-400'
-                  ]"
-                >
-                  {{ day.slots.filter(s => s.is_available).length }} slots
-                </span>
-              </button>
-            </div>
+            <DoctorAvailabilityCalendar
+              :model-value="selectedDate"
+              :days="availableDays"
+              label="Available appointment dates"
+              @update:model-value="handleSelectDay"
+            />
 
             <div class="pt-2 border-t border-slate-100">
               <div class="flex items-center justify-between mb-3">
                 <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Clock class="w-4 h-4 text-slate-500" />
-                  Available 30-Minute Time Slots &bull; {{ formattedSelectedDateDisplay }}
+                  Open time slots &bull; {{ formattedSelectedDateDisplay }}
                 </span>
               </div>
 
@@ -466,7 +439,10 @@ function handleBookAnother() {
 
               <div v-else class="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100">
                 <AlertCircle class="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
-                <p class="text-xs font-medium text-slate-600">No open time slots available on this date.</p>
+                <p class="text-xs font-medium text-slate-600">
+                  {{ selectedDayData && (selectedDayData.is_day_off || !selectedDayData.slots.length)
+                    ? 'Day off.' : 'No open time slots on this date.' }}
+                </p>
                 <p class="text-[11px] text-slate-400 mt-0.5">Please choose an alternate day above with available slots.</p>
               </div>
             </div>
@@ -475,7 +451,7 @@ function handleBookAnother() {
       </div>
 
       <div class="lg:col-span-4 space-y-6">
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5 sticky top-24">
+        <div class="app-panel p-6 space-y-5 sticky top-24">
           <div class="flex items-center gap-2 pb-3 border-b border-slate-100">
             <FileText class="w-5 h-5 text-teal-600" />
             <h2 class="text-base font-bold text-slate-900">Consultation Details</h2>
@@ -534,7 +510,7 @@ function handleBookAnother() {
             <div class="flex justify-between text-slate-600 pt-2 border-t border-slate-200 font-semibold">
               <span>Consultation Fee</span>
               <span class="font-extrabold text-slate-900 text-sm">
-                ${{ Number(doctorStore.selectedDoctor?.consultation_fee || 0).toFixed(2) }}
+                {{ consultationFeeFormat.format(Number(doctorStore.selectedDoctor?.consultation_fee ?? 0)) }}
               </span>
             </div>
           </div>
@@ -552,7 +528,7 @@ function handleBookAnother() {
               'w-full py-3.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-md',
               !doctorStore.selectedDoctor || !selectedSlot || !reasonForVisit.trim() || isSubmitting
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/25 cursor-pointer active:scale-98'
+                : 'app-primary-action shadow-teal-600/25 cursor-pointer active:scale-98'
             ]"
           >
             <Loader2 v-if="isSubmitting" class="w-4 h-4 animate-spin" />

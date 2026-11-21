@@ -180,7 +180,7 @@ async function handleConfirmCancel() {
 
 <template>
   <div class="space-y-6 pb-12">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="app-panel app-page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           My Appointments
@@ -203,7 +203,7 @@ async function handleConfirmCancel() {
 
         <router-link
           to="/portal/book"
-          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition shadow-md shadow-teal-600/20"
+          class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl app-primary-action font-semibold text-xs transition shadow-md shadow-teal-600/20"
         >
           <Plus class="w-4 h-4" />
           Book Appointment
@@ -314,7 +314,7 @@ async function handleConfirmCancel() {
       <p class="text-sm font-medium text-slate-500">Loading your appointment records...</p>
     </div>
 
-    <div v-else-if="filteredAppointments.length === 0" class="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-lg mx-auto space-y-4">
+    <div v-else-if="filteredAppointments.length === 0" class="app-panel p-12 text-center max-w-lg mx-auto space-y-4">
       <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
         <CalendarX2 class="w-8 h-8" />
       </div>
@@ -333,7 +333,7 @@ async function handleConfirmCancel() {
       <div class="pt-2">
         <router-link
           to="/portal/book"
-          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition shadow-md shadow-teal-600/20"
+          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl app-primary-action font-semibold text-xs transition shadow-md shadow-teal-600/20"
         >
           <Plus class="w-4 h-4" />
           Schedule a Consultation
@@ -345,7 +345,7 @@ async function handleConfirmCancel() {
       <div
         v-for="appt in filteredAppointments"
         :key="appt.id"
-        class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between space-y-4"
+        class="app-panel p-5 hover:shadow-md transition-shadow flex flex-col justify-between space-y-4"
       >
         <div class="space-y-3.5">
           <div class="flex items-start justify-between gap-3">

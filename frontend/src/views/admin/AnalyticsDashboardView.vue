@@ -123,7 +123,7 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+    <div class="app-panel app-page-heading">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 mb-1">
@@ -208,7 +208,7 @@ onMounted(() => {
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+      <div class="app-panel p-5 relative overflow-hidden">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gross Billed</span>
           <div class="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
@@ -226,7 +226,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+      <div class="app-panel p-5 relative overflow-hidden">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Collected Revenue</span>
           <div class="w-9 h-9 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600">
@@ -246,7 +246,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+      <div class="app-panel p-5 relative overflow-hidden">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Outstanding Receivables</span>
           <div class="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
@@ -264,7 +264,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+      <div class="app-panel p-5 relative overflow-hidden">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completion Rate</span>
           <div class="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
@@ -282,7 +282,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative overflow-hidden">
+      <div class="app-panel p-5 relative overflow-hidden">
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Practice Scale</span>
           <div class="w-9 h-9 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600">
@@ -302,7 +302,7 @@ onMounted(() => {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
+      <div class="lg:col-span-2 app-panel p-6 flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between pb-4 border-b border-slate-100">
             <div class="flex items-center gap-2">
@@ -390,7 +390,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col justify-between">
+      <div class="app-panel p-6 flex flex-col justify-between">
         <div>
           <div class="flex items-center gap-2 pb-4 border-b border-slate-100">
             <div class="w-8 h-8 rounded-lg bg-sky-50 text-sky-700 flex items-center justify-center font-bold">
@@ -483,7 +483,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+    <div class="app-panel p-6">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">

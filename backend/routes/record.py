@@ -1,11 +1,12 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 import controllers.record as record_controller
 from config.database import get_db
 from dependencies import get_current_user, require_staff
 from models.patient import Patient
+from models.record import Payment
 from models.users import User, UserRole
 from schemas.record import (
     PatientLedgerSummary,
@@ -143,6 +144,19 @@ def delete_treatment_record(
     return record_controller.delete_treatment_record(db, record_id, actor_id=current_user.id, ip_address=ip)
 
 
+def _validate_payment_consent(data: PaymentCreate, user: User) -> None:
+    has_new = data.consent_signature_base64 is not None
+    has_saved = data.reuse_consent_payment_id is not None
+    if not has_new and not has_saved:
+        return
+    if user.role != UserRole.SECRETARY:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only a secretary can collect consent at payment.")
+    if (has_new and has_saved) or data.payment_request_id is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Choose one signature option and include a payment request ID.")
+    if has_saved and not data.reuse_consent_confirmed:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Confirm the patient agrees to reuse their signature for this payment.")
+
+
 @router.post(
     "/{record_id}/payments",
     response_model=PaymentResponse,
@@ -156,6 +170,7 @@ def create_payment_for_record(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff),
 ):
+    _validate_payment_consent(data, current_user)
     ip = request.client.host if request.client else None
     return record_controller.create_payment(db, data, record_id_param=record_id, actor_id=current_user.id, ip_address=ip)
 
@@ -172,20 +187,16 @@ def create_general_payment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff),
 ):
+    _validate_payment_consent(data, current_user)
     ip = request.client.host if request.client else None
     return record_controller.create_payment(db, data, actor_id=current_user.id, ip_address=ip)
 
 
-@router.get(
-    "/payments/{payment_id}",
-    response_model=PaymentResponse,
-    summary="Get payment details",
-)
-def get_payment(
+def _get_accessible_payment(
     payment_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Payment:
     payment = record_controller.get_payment_or_404(db, payment_id)
     is_staff = current_user.role in (
         UserRole.ADMIN,
@@ -198,7 +209,27 @@ def get_payment(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to view this payment.",
         )
+    return payment
+
+
+@router.get(
+    "/payments/{payment_id}",
+    response_model=PaymentResponse,
+    summary="Get payment details",
+)
+def get_payment(payment: Payment = Depends(_get_accessible_payment)):
     return PaymentResponse.model_validate(payment)
+
+
+@router.get("/payments/{payment_id}/consent", summary="View the patient's signed payment consent")
+def get_payment_consent(payment: Payment = Depends(_get_accessible_payment)):
+    if not payment.has_consent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No consent was captured for this payment.")
+    return Response(
+        content=payment.capture.image_data,
+        media_type=payment.capture.media_type,
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.get(

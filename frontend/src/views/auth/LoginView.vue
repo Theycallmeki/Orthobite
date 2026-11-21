@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -32,12 +34,13 @@ async function handleSubmit() {
 
 <template>
   <div>
-    <h2 class="text-xl font-bold text-slate-900 text-center mb-6">
+    <h1 class="mb-6 text-center text-xl font-bold text-slate-900">
       Sign in to your account
-    </h2>
+    </h1>
 
     <div
       v-if="authStore.error"
+      role="alert"
       class="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm"
     >
       {{ authStore.error }}
@@ -45,38 +48,38 @@ async function handleSubmit() {
 
     <form @submit.prevent="handleSubmit" class="space-y-4">
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+        <label for="login-identifier" class="app-form-label">
           Email or Username
         </label>
-        <input
+        <InputText
+          id="login-identifier"
           v-model="identifier"
-          type="text"
+          autocomplete="username"
           required
-          placeholder="e.g. maria@example.com"
-          class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 text-sm"
+          fluid
         />
       </div>
 
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+        <label for="login-password" class="app-form-label">
           Password
         </label>
-        <input
+        <InputText
+          id="login-password"
           v-model="password"
           type="password"
+          autocomplete="current-password"
           required
-          placeholder="••••••••"
-          class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 text-sm"
+          fluid
         />
       </div>
 
-      <button
+      <Button
         type="submit"
-        :disabled="authStore.isLoading"
-        class="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-medium text-sm rounded-lg shadow-sm transition-colors cursor-pointer"
-      >
-        {{ authStore.isLoading ? 'Signing in...' : 'Sign in' }}
-      </button>
+        :loading="authStore.isLoading"
+        :label="authStore.isLoading ? 'Signing in…' : 'Sign in'"
+        class="min-h-11 w-full"
+      />
     </form>
 
     <div class="mt-6 text-center text-xs text-slate-600">

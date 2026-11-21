@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -36,12 +38,13 @@ async function handleSubmit() {
 
 <template>
   <div>
-    <h2 class="text-xl font-bold text-slate-900 text-center mb-6">
+    <h1 class="mb-6 text-center text-xl font-bold text-slate-900">
       Create a Patient Account
-    </h2>
+    </h1>
 
     <div
       v-if="authStore.error"
+      role="alert"
       class="mb-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm"
     >
       {{ authStore.error }}
@@ -49,76 +52,78 @@ async function handleSubmit() {
 
     <form @submit.prevent="handleSubmit" class="space-y-3.5">
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+        <label for="register-name" class="app-form-label">
           Full Name
         </label>
-        <input
+        <InputText
+          id="register-name"
           v-model="fullName"
-          type="text"
+          autocomplete="name"
           required
-          placeholder="Juan Dela Cruz"
-          class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 text-sm"
+          fluid
         />
       </div>
 
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+        <label for="register-username" class="app-form-label">
           Username
         </label>
-        <input
+        <InputText
+          id="register-username"
           v-model="username"
-          type="text"
+          autocomplete="username"
           required
-          placeholder="juandc"
-          class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 text-sm"
+          fluid
         />
       </div>
 
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+        <label for="register-email" class="app-form-label">
           Email Address
         </label>
-        <input
+        <InputText
+          id="register-email"
           v-model="email"
           type="email"
+          autocomplete="email"
           required
-          placeholder="juan@example.com"
-          class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 text-sm"
+          fluid
         />
       </div>
 
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+        <label for="register-phone" class="app-form-label">
           Phone (Optional)
         </label>
-        <input
+        <InputText
+          id="register-phone"
           v-model="phone"
           type="tel"
-          placeholder="+639171234567"
-          class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 text-sm"
+          autocomplete="tel"
+          fluid
         />
       </div>
 
       <div>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1">
+        <label for="register-password" class="app-form-label">
           Password
         </label>
-        <input
+        <InputText
+          id="register-password"
           v-model="password"
           type="password"
+          autocomplete="new-password"
           required
-          placeholder="••••••••"
-          class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-600 text-sm"
+          fluid
         />
       </div>
 
-      <button
+      <Button
         type="submit"
-        :disabled="authStore.isLoading"
-        class="w-full py-2.5 px-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-medium text-sm rounded-lg shadow-sm transition-colors cursor-pointer mt-2"
-      >
-        {{ authStore.isLoading ? 'Creating account...' : 'Create account' }}
-      </button>
+        :loading="authStore.isLoading"
+        :label="authStore.isLoading ? 'Creating account…' : 'Create account'"
+        class="mt-2 min-h-11 w-full"
+      />
     </form>
 
     <div class="mt-6 text-center text-xs text-slate-600">

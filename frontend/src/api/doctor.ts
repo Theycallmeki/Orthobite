@@ -27,6 +27,7 @@ export interface DayAvailability {
   day_of_week: number
   day_name: string
   slots: TimeSlot[]
+  is_day_off?: boolean
 }
 
 export interface DoctorAvailabilityResponse {
