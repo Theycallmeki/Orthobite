@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import DoctorAvailabilityCalendar from '@/components/DoctorAvailabilityCalendar.vue'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAppointmentStore } from '@/stores/appointment'
 import type { DoctorPublicResponse, DayAvailability, TimeSlot } from '@/api/doctor'
@@ -402,47 +403,18 @@ function handleBookAnother() {
           </div>
 
           <div v-else class="space-y-5">
-            <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-              <button
-                v-for="day in availableDays"
-                :key="day.date"
-                type="button"
-                @click="handleSelectDay(day.date)"
-                :class="[
-                  'flex flex-col items-center justify-center min-w-16 py-3 px-2 rounded-2xl border text-center transition cursor-pointer',
-                  selectedDate === day.date
-                    ? 'border-teal-600 bg-teal-600 text-white shadow-md shadow-teal-600/20'
-                    : day.slots.some(s => s.is_available)
-                      ? 'border-slate-200 bg-white hover:border-teal-300 text-slate-700'
-                      : 'border-slate-100 bg-slate-50 text-slate-300 opacity-60'
-                ]"
-              >
-                <span class="text-[11px] font-medium uppercase tracking-wider">
-                  {{ day.day_name.slice(0, 3) }}
-                </span>
-                <span class="text-base font-extrabold my-0.5">
-                  {{ day.date.split('-')[2] }}
-                </span>
-                <span
-                  :class="[
-                    'text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-1',
-                    selectedDate === day.date
-                      ? 'bg-teal-700 text-teal-100'
-                      : day.slots.filter(s => s.is_available).length > 0
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-slate-100 text-slate-400'
-                  ]"
-                >
-                  {{ day.slots.filter(s => s.is_available).length }} slots
-                </span>
-              </button>
-            </div>
+            <DoctorAvailabilityCalendar
+              :model-value="selectedDate"
+              :days="availableDays"
+              label="Available appointment dates"
+              @update:model-value="handleSelectDay"
+            />
 
             <div class="pt-2 border-t border-slate-100">
               <div class="flex items-center justify-between mb-3">
                 <span class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <Clock class="w-4 h-4 text-slate-500" />
-                  Available 30-Minute Time Slots &bull; {{ formattedSelectedDateDisplay }}
+                  Open time slots &bull; {{ formattedSelectedDateDisplay }}
                 </span>
               </div>
 
@@ -466,7 +438,10 @@ function handleBookAnother() {
 
               <div v-else class="text-center py-8 bg-slate-50 rounded-2xl border border-slate-100">
                 <AlertCircle class="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
-                <p class="text-xs font-medium text-slate-600">No open time slots available on this date.</p>
+                <p class="text-xs font-medium text-slate-600">
+                  {{ selectedDayData && (selectedDayData.is_day_off || !selectedDayData.slots.length)
+                    ? 'Day off.' : 'No open time slots on this date.' }}
+                </p>
                 <p class="text-[11px] text-slate-400 mt-0.5">Please choose an alternate day above with available slots.</p>
               </div>
             </div>

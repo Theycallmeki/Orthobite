@@ -84,6 +84,7 @@ class DayAvailability(BaseModel):
     day_of_week: int                                    
     day_name: str                                         
     slots: List[TimeSlot]
+    is_day_off: bool = False
 
 
 class DoctorAvailabilityResponse(BaseModel):

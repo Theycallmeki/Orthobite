@@ -271,6 +271,7 @@ def generate_doctor_availability(
         day_rules = rules_by_day.get(day_of_week, [])
 
         day_slots = []
+        is_day_off = True
 
         for rule in day_rules:
 
@@ -282,20 +283,14 @@ def generate_doctor_availability(
                 slot_end = slot_start + slot_delta
 
 
-                is_available = True
-
-
-                if slot_end < now:
-                    is_available = False
-
-
-                if is_available:
-                    for to in time_off_list:
-                        to_start = to.start_datetime.replace(tzinfo=None) if to.start_datetime.tzinfo else to.start_datetime
-                        to_end = to.end_datetime.replace(tzinfo=None) if to.end_datetime.tzinfo else to.end_datetime
-                        if slot_start < to_end and slot_end > to_start:
-                            is_available = False
-                            break
+                on_leave = any(
+                    slot_start < block.end_datetime.replace(tzinfo=None)
+                    and slot_end > block.start_datetime.replace(tzinfo=None)
+                    for block in time_off_list
+                )
+                if not on_leave:
+                    is_day_off = False
+                is_available = not on_leave and slot_start >= now
 
 
                 if is_available:
@@ -323,6 +318,7 @@ def generate_doctor_availability(
                 day_of_week=day_of_week,
                 day_name=DAYS_OF_WEEK_NAMES[day_of_week],
                 slots=day_slots,
+                is_day_off=is_day_off,
             )
         )
 

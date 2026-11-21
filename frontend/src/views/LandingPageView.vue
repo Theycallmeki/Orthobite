@@ -109,7 +109,7 @@ onMounted(loadDoctors)
           <Button type="button" label="Try again" size="small" outlined class="mt-3" @click="loadDoctors" />
         </div>
         <p v-else-if="!doctors.length" role="status" class="app-panel p-6 text-slate-600">There are no doctors accepting appointments right now.</p>
-        <div v-else class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div v-else class="space-y-5">
           <DoctorAvailabilityCard
             v-for="doctor in doctors"
             :key="`${doctor.id}-${monthKey}`"

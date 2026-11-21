@@ -42,19 +42,6 @@ body {
     font-weight: 600;
   }
 
-  .app-field {
-    background-color: var(--p-form-field-background, #fff);
-    border: 1px solid var(--p-form-field-border-color, #cbd5e1);
-    border-radius: var(--p-form-field-border-radius, 0.5rem);
-    color: var(--p-form-field-color, #0f172a);
-  }
-
-  .app-field:focus-visible {
-    border-color: var(--p-primary-color, #0f766e);
-    outline: 2px solid var(--p-primary-100, #ccfbf1);
-    outline-offset: 1px;
-  }
-
   .app-primary-action {
     background-color: var(--p-primary-color, #0f766e);
     color: var(--p-primary-contrast-color, #fff);

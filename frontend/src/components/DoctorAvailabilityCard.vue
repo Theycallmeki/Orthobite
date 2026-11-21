@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ChevronDown, Clock } from 'lucide-vue-next'
+import { Clock } from 'lucide-vue-next'
 import Button from 'primevue/button'
-import { doctorsApi, type DoctorPublicResponse } from '@/api/doctor'
+import { doctorsApi, type DayAvailability, type DoctorPublicResponse } from '@/api/doctor'
+import DoctorAvailabilityCalendar from './DoctorAvailabilityCalendar.vue'
 
 const props = defineProps<{ doctor: DoctorPublicResponse; month: string }>()
 
-const availableDays = ref<{ date: string; times: string[] }[]>([])
+const days = ref<DayAvailability[]>([])
 const selectedDate = ref('')
 const loading = ref(true)
 const failed = ref(false)
-const selectedDay = computed(() => availableDays.value.find((day) => day.date === selectedDate.value))
+const selectedDay = computed(() => days.value.find((day) => day.date === selectedDate.value))
+const openTimes = computed(() => [...new Set(selectedDay.value?.slots
+  .filter((slot) => slot.is_available)
+  .sort((a, b) => a.start_time.localeCompare(b.start_time))
+  .map((slot) => slot.formatted_time))])
 const initials = computed(() =>
   props.doctor.full_name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase(),
 )
@@ -31,16 +36,9 @@ async function loadAvailability() {
   failed.value = false
   try {
     const { data } = await doctorsApi.getDoctorAvailability(props.doctor.id, props.month)
-    availableDays.value = data.days
-      .map((day) => ({
-        date: day.date,
-        times: [...new Set(day.slots
-          .filter((slot) => slot.is_available)
-          .sort((a, b) => a.start_time.localeCompare(b.start_time))
-          .map((slot) => slot.formatted_time))],
-      }))
-      .filter((day) => day.times.length > 0)
-    selectedDate.value = availableDays.value[0]?.date ?? ''
+    days.value = data.days
+    selectedDate.value = days.value.find((day) => day.slots.some((slot) => slot.is_available))?.date
+      ?? days.value[0]?.date ?? ''
   } catch {
     failed.value = true
   } finally {
@@ -52,51 +50,45 @@ onMounted(loadAvailability)
 </script>
 
 <template>
-  <article class="app-panel p-5 sm:p-6">
-    <div class="flex items-center gap-3 border-b border-slate-100 pb-4">
-      <span aria-hidden="true" class="grid size-12 shrink-0 place-items-center rounded-xl bg-teal-50 font-bold text-teal-800">
-        {{ initials }}
-      </span>
-      <div>
-        <h3 class="text-lg font-semibold leading-snug text-slate-900">{{ doctor.full_name }}</h3>
-        <p class="text-sm text-slate-600">{{ doctor.specialty }}</p>
+  <article class="grid items-start gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+    <div class="app-panel p-5 sm:p-6">
+      <div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+        <span aria-hidden="true" class="grid size-12 shrink-0 place-items-center rounded-xl bg-teal-50 font-bold text-teal-800">
+          {{ initials }}
+        </span>
+        <div>
+          <h3 class="text-lg font-semibold leading-snug text-slate-900">{{ doctor.full_name }}</h3>
+          <p class="text-sm text-slate-600">{{ doctor.specialty }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <p v-if="loading" role="status" class="text-sm text-slate-600">Loading available times…</p>
+        <div v-else-if="failed">
+          <p role="status" class="text-sm text-slate-600">Couldn’t load this schedule.</p>
+          <Button type="button" label="Try again" size="small" outlined class="mt-2" @click="loadAvailability" />
+        </div>
+        <p v-else-if="!days.length" class="text-sm text-slate-600">No schedule for this month.</p>
+        <DoctorAvailabilityCalendar v-else v-model="selectedDate" :days="days" :label="`${doctor.full_name} availability`" />
       </div>
     </div>
 
-    <div class="mt-4">
-      <p v-if="loading" role="status" class="text-sm text-slate-600">Loading available times…</p>
-      <div v-else-if="failed">
-        <p role="status" class="text-sm text-slate-600">Couldn’t load this schedule.</p>
-        <Button type="button" label="Try again" size="small" outlined class="mt-2" @click="loadAvailability" />
+    <section v-if="selectedDay && !loading && !failed" class="app-panel p-5 sm:p-6">
+      <h4 class="flex items-center gap-2 text-lg font-semibold text-slate-900">
+        <Clock class="size-5 text-teal-700" aria-hidden="true" />
+        Available times
+      </h4>
+      <div class="mt-2" aria-live="polite">
+        <p class="text-sm font-medium text-slate-600">{{ formatDate(selectedDate) }}</p>
+        <ul v-if="openTimes.length" aria-label="Open times" class="mt-4 flex flex-wrap gap-2">
+          <li v-for="time in openTimes" :key="time" class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium whitespace-nowrap text-emerald-950">
+            {{ time }}
+          </li>
+        </ul>
+        <p v-else class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          {{ selectedDay.is_day_off || !selectedDay.slots.length ? 'Day off.' : 'No open times on this date.' }}
+        </p>
       </div>
-      <p v-else-if="!selectedDay" class="text-sm text-slate-600">No open appointments this month.</p>
-      <template v-else>
-        <label :for="`availability-date-${doctor.id}`" class="app-form-label">
-          Available dates
-        </label>
-        <div class="relative mt-1.5">
-          <select
-            :id="`availability-date-${doctor.id}`"
-            v-model="selectedDate"
-            class="app-field w-full appearance-none py-2.5 pr-9 pl-3"
-          >
-            <option v-for="day in availableDays" :key="day.date" :value="day.date">{{ formatDate(day.date) }}</option>
-          </select>
-          <ChevronDown class="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-slate-600" aria-hidden="true" />
-        </div>
-
-        <div class="mt-4" aria-live="polite">
-          <p class="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-            <Clock class="size-4 text-teal-700" aria-hidden="true" />
-            Open times
-          </p>
-          <ul class="mt-2 flex flex-wrap gap-2">
-            <li v-for="time in selectedDay.times" :key="time" class="rounded-md bg-teal-50 px-2.5 py-1.5 text-sm font-medium whitespace-nowrap text-teal-950">
-              {{ time }}
-            </li>
-          </ul>
-        </div>
-      </template>
-    </div>
+    </section>
   </article>
 </template>
