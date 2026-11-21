@@ -7,15 +7,16 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    LargeBinary,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import deferred, relationship
 from sqlalchemy.sql import func
 from config.database import Base
 
 
 class Conversation(Base):
     """
-    Direct chat conversation between a Patient and Clinic Secretary/Staff.
+    Direct chat conversation between a patient and the clinic secretary.
     """
     __tablename__ = "conversations"
 
@@ -58,8 +59,19 @@ class ChatMessage(Base):
 
     conversation = relationship("Conversation", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id])
+    attachment = relationship(
+        "ChatAttachment", uselist=False, lazy="selectin", cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("ix_chat_messages_conv_read", "conversation_id", "is_read"),
         Index("ix_chat_messages_conv_created", "conversation_id", "created_at"),
     )
+
+
+class ChatAttachment(Base):
+    __tablename__ = "chat_attachments"
+
+    message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="CASCADE"), primary_key=True)
+    media_type = Column(String(30), nullable=False)
+    image_data = deferred(Column(LargeBinary, nullable=False))

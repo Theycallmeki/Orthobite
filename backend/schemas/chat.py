@@ -16,6 +16,7 @@ class ChatMessageResponse(BaseModel):
     sender_name: Optional[str] = None
     sender_role: Optional[str] = None
     content: str
+    has_image: bool = False
     is_read: bool
     created_at: py_datetime
 

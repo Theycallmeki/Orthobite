@@ -1,11 +1,14 @@
-import json
 import logging
 from typing import Optional
 from fastapi import (
     APIRouter,
     Depends,
+    File,
+    Form,
     HTTPException,
     Query,
+    Response,
+    UploadFile,
     WebSocket,
     WebSocketDisconnect,
     status,
@@ -16,8 +19,8 @@ from sqlalchemy.orm import Session
 import controllers.chat as chat_controller
 from config.database import SessionLocal, get_db
 from config.settings import settings
-from dependencies import get_current_user, require_staff
-from models.chat import Conversation
+from dependencies import require_role
+from models.chat import ChatAttachment, ChatMessage
 from models.users import User, UserRole
 from schemas.chat import (
     ChatHistoryResponse,
@@ -29,11 +32,14 @@ from schemas.chat import (
     MarkReadResponse,
 )
 from services.websocket import manager
+from services.images import MAX_IMAGE_SIZE_BYTES, validate_image_bytes
 
 logger = logging.getLogger("orthobite.chat")
 
 router = APIRouter(prefix="/chat", tags=["Live Chat & Messaging"])
 ws_router = APIRouter(tags=["Live Chat & Messaging"])
+require_chat_user = require_role(*chat_controller.CHAT_ROLES)
+require_chat_secretary = require_role(UserRole.SECRETARY)
 
 
 def authenticate_ws_token(token: Optional[str], db: Session) -> Optional[User]:
@@ -43,7 +49,7 @@ def authenticate_ws_token(token: Optional[str], db: Session) -> Optional[User]:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id_str = payload.get("sub")
-        if not user_id_str:
+        if not user_id_str or payload.get("type", "access") != "access":
             return None
         user_id = int(user_id_str)
         user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
@@ -62,13 +68,15 @@ async def websocket_chat_endpoint(
     Accepts JWT token in query parameter (?token=...).
     """
     db = SessionLocal()
+    connected_user_id = None
     try:
         user = authenticate_ws_token(token, db)
-        if not user:
+        if not user or user.role not in chat_controller.CHAT_ROLES:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
         await manager.connect(user.id, websocket)
+        connected_user_id = user.id
 
 
         await websocket.send_json({
@@ -78,100 +86,69 @@ async def websocket_chat_endpoint(
             "role": user.role.value if hasattr(user.role, "value") else str(user.role),
             "message": "Connected to OrthoBite Live Chat.",
         })
+        db.commit()
 
         while True:
             data = await websocket.receive_json()
-            frame_type = data.get("type", "send_message")
+            if not isinstance(data, dict):
+                await websocket.send_json({"type": "error", "detail": "Invalid chat frame."})
+                continue
 
+            frame_type = data.get("type", "send_message")
             if frame_type == "ping":
                 await websocket.send_json({"type": "pong"})
+                continue
 
-            elif frame_type == "typing":
-                conv_id = data.get("conversation_id")
-                if conv_id:
-                    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-                    if conv:
-                        recipient_id = conv.secretary_id if user.id == conv.patient_id else conv.patient_id
-                        if recipient_id:
-                            await manager.send_personal_message(recipient_id, {
-                                "type": "typing",
-                                "conversation_id": conv_id,
-                                "user_id": user.id,
-                                "username": user.full_name or user.username,
-                            })
-
-            elif frame_type == "read":
-                conv_id = data.get("conversation_id")
-                if conv_id:
-                    res = chat_controller.mark_conversation_as_read(db, conv_id, user.id)
-                    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-                    if conv:
-                        recipient_id = conv.secretary_id if user.id == conv.patient_id else conv.patient_id
-                        if recipient_id:
-                            await manager.send_personal_message(recipient_id, {
-                                "type": "read_receipt",
-                                "conversation_id": conv_id,
-                                "read_by": user.id,
-                                "marked_count": res.marked_read_count,
-                            })
-
-            elif frame_type == "send_message":
-                conv_id = data.get("conversation_id")
-                content = data.get("content", "").strip()
-
-                if not conv_id or not content:
-                    await websocket.send_json({
-                        "type": "error",
-                        "detail": "conversation_id and content are required.",
-                    })
-                    continue
-
-
-                conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
-                if not conv:
-                    await websocket.send_json({"type": "error", "detail": "Conversation not found."})
-                    continue
-
-                is_staff = user.role in (UserRole.ADMIN, UserRole.SECRETARY, UserRole.DOCTOR, UserRole.ORTHODONTIST)
-                if not is_staff and conv.patient_id != user.id:
-                    await websocket.send_json({"type": "error", "detail": "Not authorized in this conversation."})
-                    continue
-
-
-                msg_response = chat_controller.create_chat_message(db, conv_id, user.id, content)
-                payload = {
-                    "type": "new_message",
-                    "conversation_id": conv_id,
-                    "message": msg_response.model_dump(mode="json"),
-                }
-
-
-                if user.id == conv.patient_id:
-                    if conv.secretary_id:
-                        await manager.send_personal_message(conv.secretary_id, payload)
-                    else:
-
-                        staff_users = db.query(User.id).filter(
-                            User.role.in_([UserRole.SECRETARY, UserRole.ADMIN])
-                        ).all()
-                        for (s_id,) in staff_users:
-                            await manager.send_personal_message(s_id, payload)
+            conv_id = data.get("conversation_id")
+            if type(conv_id) is not int or conv_id <= 0:
+                await websocket.send_json({"type": "error", "detail": "A conversation ID is required."})
+                continue
+            try:
+                conv = chat_controller.get_accessible_conversation(db, conv_id, user, lock=frame_type == "send_message")
+                if frame_type == "typing":
+                    payload = {
+                        "type": "typing", "conversation_id": conv_id, "user_id": user.id,
+                        "username": user.full_name or user.username,
+                    }
+                elif frame_type == "read":
+                    result = chat_controller.mark_conversation_as_read(db, conv_id, user.id)
+                    payload = {
+                        "type": "read_receipt", "conversation_id": conv_id, "read_by": user.id,
+                        "marked_count": result.marked_read_count,
+                    }
+                elif frame_type == "send_message":
+                    content = data.get("content")
+                    if not isinstance(content, str):
+                        raise HTTPException(status_code=422, detail="Message text is required.")
+                    message = chat_controller.create_chat_message(db, conv, user, content)
+                    payload = _message_payload(message)
                 else:
-
-                    await manager.send_personal_message(conv.patient_id, payload)
-
-
-                await manager.send_personal_message(user.id, payload)
+                    raise HTTPException(status_code=422, detail="Unsupported chat frame.")
+                recipients = chat_controller.get_recipient_ids(db, conv, user)
+                if frame_type == "send_message":
+                    recipients.add(user.id)
+                db.commit()
+                await manager.broadcast_to_users(recipients, payload)
+            except HTTPException as exc:
+                db.rollback()
+                await websocket.send_json({"type": "error", "detail": exc.detail})
 
     except WebSocketDisconnect:
-        if user:
-            manager.disconnect(user.id, websocket)
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        if user:
-            manager.disconnect(user.id, websocket)
+        pass
+    except Exception:
+        logger.exception("WebSocket chat failed")
     finally:
+        if connected_user_id is not None:
+            manager.disconnect(connected_user_id, websocket)
         db.close()
+
+
+def _message_payload(message: ChatMessageResponse) -> dict:
+    return {
+        "type": "new_message",
+        "conversation_id": message.conversation_id,
+        "message": message.model_dump(mode="json"),
+    }
 
 
 @router.get(
@@ -181,7 +158,7 @@ async def websocket_chat_endpoint(
 )
 def get_conversations(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_chat_user),
 ):
     """
     Returns secretary inbox with unread counts, or the authenticated patient's conversation.
@@ -195,19 +172,15 @@ def get_conversations(
     status_code=status.HTTP_201_CREATED,
     summary="Create or get active conversation",
 )
-def initiate_conversation(
+async def initiate_conversation(
     data: Optional[ConversationCreate] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_chat_user),
 ):
-    """Initiates a conversation between a patient and clinic staff."""
-    is_staff = current_user.role in (UserRole.ADMIN, UserRole.SECRETARY, UserRole.DOCTOR, UserRole.ORTHODONTIST)
-    if is_staff:
+    """Initiates a conversation between a patient and the clinic secretary."""
+    if current_user.role == UserRole.SECRETARY:
         if not data or not data.patient_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="patient_id is required when staff creates a conversation.",
-            )
+            raise HTTPException(status_code=400, detail="patient_id is required when a secretary creates a conversation.")
         target_patient_id = data.patient_id
         secretary_id = current_user.id
     else:
@@ -215,7 +188,23 @@ def initiate_conversation(
         secretary_id = None
 
     conv = chat_controller.get_or_create_conversation(db, target_patient_id, secretary_id)
+    recipients = chat_controller.get_recipient_ids(db, conv, current_user)
+    await manager.broadcast_to_users(recipients, {"type": "conversation_updated", "conversation_id": conv.id})
     return chat_controller.format_conversation_response(db, conv, current_user.id)
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_chat_secretary),
+):
+    conv = chat_controller.get_accessible_conversation(db, conversation_id, current_user, lock=True)
+    recipients = chat_controller.get_active_secretary_ids(db) | {conv.patient_id}
+    db.delete(conv)
+    db.commit()
+    await manager.broadcast_to_users(recipients, {"type": "conversation_deleted", "conversation_id": conversation_id})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -227,18 +216,13 @@ def get_conversation_history(
     conversation_id: int,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    newest: bool = False,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_chat_user),
 ):
     """Retrieves paginated chat history for a conversation."""
-    conv = chat_controller.get_conversation_or_404(db, conversation_id)
-    is_staff = current_user.role in (UserRole.ADMIN, UserRole.SECRETARY, UserRole.DOCTOR, UserRole.ORTHODONTIST)
-    if not is_staff and conv.patient_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this conversation.",
-        )
-    return chat_controller.get_chat_history(db, conversation_id, page=page, page_size=page_size)
+    chat_controller.get_accessible_conversation(db, conversation_id, current_user)
+    return chat_controller.get_chat_history(db, conversation_id, page=page, page_size=page_size, newest=newest)
 
 
 @router.post(
@@ -251,30 +235,55 @@ async def send_message_http(
     conversation_id: int,
     data: ChatMessageCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_chat_user),
 ):
     """HTTP fallback endpoint to send a message without a WebSocket."""
-    conv = chat_controller.get_conversation_or_404(db, conversation_id)
-    is_staff = current_user.role in (UserRole.ADMIN, UserRole.SECRETARY, UserRole.DOCTOR, UserRole.ORTHODONTIST)
-    if not is_staff and conv.patient_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this conversation.",
-        )
-
-    msg_resp = chat_controller.create_chat_message(db, conversation_id, current_user.id, data.content)
-
-
-    payload = {
-        "type": "new_message",
-        "conversation_id": conversation_id,
-        "message": msg_resp.model_dump(mode="json"),
-    }
-    recipient_id = conv.secretary_id if current_user.id == conv.patient_id else conv.patient_id
-    if recipient_id:
-        await manager.send_personal_message(recipient_id, payload)
-
+    conv = chat_controller.get_accessible_conversation(db, conversation_id, current_user, lock=True)
+    msg_resp = chat_controller.create_chat_message(db, conv, current_user, data.content)
+    recipients = chat_controller.get_recipient_ids(db, conv, current_user) | {current_user.id}
+    await manager.broadcast_to_users(recipients, _message_payload(msg_resp))
     return msg_resp
+
+
+@router.post("/conversations/{conversation_id}/images", response_model=ChatMessageResponse, status_code=status.HTTP_201_CREATED)
+async def send_image(
+    conversation_id: int,
+    file: UploadFile = File(...),
+    caption: str = Form("", max_length=2000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_chat_user),
+):
+    chat_controller.get_accessible_conversation(db, conversation_id, current_user)
+    data = await file.read(MAX_IMAGE_SIZE_BYTES + 1)
+    extension = validate_image_bytes(data)
+    media_type = "image/jpeg" if extension == ".jpg" else f"image/{extension[1:]}"
+    conv = chat_controller.get_accessible_conversation(db, conversation_id, current_user, lock=True)
+    message = chat_controller.create_chat_message(
+        db, conv, current_user, caption, ChatAttachment(media_type=media_type, image_data=data),
+    )
+    recipients = chat_controller.get_recipient_ids(db, conv, current_user) | {current_user.id}
+    await manager.broadcast_to_users(recipients, _message_payload(message))
+    return message
+
+
+@router.get("/conversations/{conversation_id}/messages/{message_id}/image")
+def get_message_image(
+    conversation_id: int,
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_chat_user),
+):
+    chat_controller.get_accessible_conversation(db, conversation_id, current_user)
+    attachment = db.query(ChatAttachment).join(ChatMessage).filter(
+        ChatAttachment.message_id == message_id, ChatMessage.conversation_id == conversation_id,
+    ).first()
+    if attachment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This message has no image.")
+    return Response(
+        content=attachment.image_data,
+        media_type=attachment.media_type,
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 @router.post(
@@ -285,27 +294,16 @@ async def send_message_http(
 async def mark_messages_read(
     conversation_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_chat_user),
 ):
     """Marks all incoming messages in this conversation as read."""
-    conv = chat_controller.get_conversation_or_404(db, conversation_id)
-    is_staff = current_user.role in (UserRole.ADMIN, UserRole.SECRETARY, UserRole.DOCTOR, UserRole.ORTHODONTIST)
-    if not is_staff and conv.patient_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this conversation.",
-        )
-
+    conv = chat_controller.get_accessible_conversation(db, conversation_id, current_user)
     res = chat_controller.mark_conversation_as_read(db, conversation_id, current_user.id)
-
-
-    recipient_id = conv.secretary_id if current_user.id == conv.patient_id else conv.patient_id
-    if recipient_id:
-        await manager.send_personal_message(recipient_id, {
-            "type": "read_receipt",
-            "conversation_id": conversation_id,
-            "read_by": current_user.id,
-            "marked_count": res.marked_read_count,
-        })
-
+    recipients = chat_controller.get_recipient_ids(db, conv, current_user)
+    await manager.broadcast_to_users(recipients, {
+        "type": "read_receipt",
+        "conversation_id": conversation_id,
+        "read_by": current_user.id,
+        "marked_count": res.marked_read_count,
+    })
     return res

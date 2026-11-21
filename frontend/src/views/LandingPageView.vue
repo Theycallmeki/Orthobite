@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { CalendarDays } from 'lucide-vue-next'
+import { CalendarDays, ChevronDown } from 'lucide-vue-next'
 import Button from 'primevue/button'
 import { doctorsApi, type DoctorPublicResponse } from '@/api/doctor'
 import AppBrand from '@/components/AppBrand.vue'
@@ -25,6 +25,8 @@ const monthLabel = computed(() =>
 )
 
 const doctors = ref<DoctorPublicResponse[]>([])
+const selectedDoctorId = ref<number | null>(null)
+const selectedDoctor = computed(() => doctors.value.find((doctor) => doctor.id === selectedDoctorId.value))
 const loading = ref(true)
 const failed = ref(false)
 
@@ -34,6 +36,7 @@ async function loadDoctors() {
   try {
     const { data } = await doctorsApi.listPublicDoctors()
     doctors.value = data
+    selectedDoctorId.value = selectedDoctor.value?.id ?? data[0]?.id ?? null
   } catch {
     failed.value = true
   } finally {
@@ -74,7 +77,7 @@ onMounted(loadDoctors)
         <div class="mb-7 flex flex-col gap-5 border-b border-teal-950/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 id="availability-heading" class="text-3xl font-semibold tracking-tight sm:text-4xl">Doctor availability</h2>
-            <p class="mt-2 text-slate-600">Choose a date to see open appointment times. Times are shown in clinic local time.</p>
+            <p class="mt-2 text-slate-600">Choose a doctor and date to see open appointment times in clinic local time.</p>
           </div>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span class="flex items-center gap-2 font-semibold text-teal-950" aria-live="polite">
@@ -110,10 +113,25 @@ onMounted(loadDoctors)
         </div>
         <p v-else-if="!doctors.length" role="status" class="app-panel p-6 text-slate-600">There are no doctors accepting appointments right now.</p>
         <div v-else class="space-y-5">
+          <div class="max-w-sm">
+            <label for="availability-doctor" class="app-form-label">Doctor</label>
+            <div class="relative">
+              <select
+                id="availability-doctor"
+                v-model="selectedDoctorId"
+                class="w-full appearance-none rounded-lg border border-slate-300 bg-white py-2.5 pr-10 pl-3 text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+              >
+                <option v-for="doctor in doctors" :key="doctor.id" :value="doctor.id">
+                  {{ doctor.full_name }}
+                </option>
+              </select>
+              <ChevronDown class="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+            </div>
+          </div>
           <DoctorAvailabilityCard
-            v-for="doctor in doctors"
-            :key="`${doctor.id}-${monthKey}`"
-            :doctor="doctor"
+            v-if="selectedDoctor"
+            :key="`${selectedDoctor.id}-${monthKey}`"
+            :doctor="selectedDoctor"
             :month="monthKey"
           />
         </div>

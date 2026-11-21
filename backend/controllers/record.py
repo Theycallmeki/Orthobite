@@ -1,12 +1,10 @@
 import base64
-import io
 import os
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from fastapi import HTTPException, UploadFile, status
-from PIL import Image
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,6 +23,7 @@ from schemas.record import (
     TreatmentRecordUpdate,
 )
 from services.audit_logger import log_event
+from services.images import validate_image_bytes
 
 
 TWO_PLACES = Decimal("0.01")
@@ -149,40 +148,6 @@ def compute_patient_ledger_summary(
     return summary
 
 
-ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP"}
-MAX_SIGNATURE_SIZE_BYTES = 5 * 1024 * 1024
-
-
-def _validate_image_bytes(data: bytes) -> str:
-    if not data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Signature image data cannot be empty.",
-        )
-    if len(data) > MAX_SIGNATURE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Image size exceeds the maximum allowed limit of {MAX_SIGNATURE_SIZE_BYTES // (1024 * 1024)}MB.",
-        )
-    try:
-        image = Image.open(io.BytesIO(data))
-        image.verify()
-        fmt = (image.format or "").upper()
-        if fmt not in ALLOWED_IMAGE_FORMATS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported image format: '{fmt or 'unknown'}'. Allowed formats: PNG, JPEG, WEBP.",
-            )
-        return ".jpg" if fmt == "JPEG" else f".{fmt.lower()}"
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Corrupted or invalid image data: {str(e)}",
-        )
-
-
 def _decode_signature_base64(signature_data: str) -> bytes:
     if not signature_data:
         raise HTTPException(
@@ -207,7 +172,7 @@ def _decode_signature_base64(signature_data: str) -> bytes:
 
 def save_signature_base64(signature_data: str) -> str:
     decoded_bytes = _decode_signature_base64(signature_data)
-    ext = _validate_image_bytes(decoded_bytes)
+    ext = validate_image_bytes(decoded_bytes)
 
     os.makedirs(settings.SIGNATURES_DIR, exist_ok=True)
     filename = f"sig_{uuid.uuid4().hex}{ext}"
@@ -224,7 +189,7 @@ async def save_signature_file(file: UploadFile) -> str:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded signature has no filename.")
 
     content = await file.read()
-    ext = _validate_image_bytes(content)
+    ext = validate_image_bytes(content)
 
     os.makedirs(settings.SIGNATURES_DIR, exist_ok=True)
     filename = f"sig_{uuid.uuid4().hex}{ext}"
@@ -417,7 +382,7 @@ def create_payment(
         )
         if data.consent_signature_base64 is not None:
             image_data = _decode_signature_base64(data.consent_signature_base64)
-            extension = _validate_image_bytes(image_data)
+            extension = validate_image_bytes(image_data)
             payment.capture.image_data = image_data
             payment.capture.media_type = "image/jpeg" if extension == ".jpg" else f"image/{extension[1:]}"
 

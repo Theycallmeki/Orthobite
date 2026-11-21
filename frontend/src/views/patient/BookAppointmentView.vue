@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import DoctorAvailabilityCalendar from '@/components/DoctorAvailabilityCalendar.vue'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAppointmentStore } from '@/stores/appointment'
-import type { DoctorPublicResponse, DayAvailability, TimeSlot } from '@/api/doctor'
+import type { DayAvailability, TimeSlot } from '@/api/doctor'
 import type { AppointmentResponse } from '@/api/appointment'
 import {
   Calendar,
@@ -15,6 +15,7 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ArrowRight,
   FileText,
   DollarSign,
@@ -32,11 +33,13 @@ const currentYear = ref<number>(new Date().getFullYear())
 const currentMonth = ref<number>(new Date().getMonth() + 1)
 const selectedDate = ref<string>('')
 const selectedSlot = ref<TimeSlot | null>(null)
-const reasonForVisit = ref<string>('Orthodontic Consultation')
+const selectedReason = ref('Orthodontic Consultation')
+const otherReason = ref('')
+const otherReasonInput = ref<HTMLInputElement | null>(null)
+const reasonForVisit = computed(() => selectedReason.value === 'Other' ? otherReason.value.trim() : selectedReason.value)
 const notes = ref<string>('')
 const isSubmitting = ref<boolean>(false)
 const bookingSuccessData = ref<AppointmentResponse | null>(null)
-const showDoctorPicker = ref<boolean>(false)
 const consultationFeeFormat = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 
 const commonReasons = [
@@ -46,6 +49,7 @@ const commonReasons = [
   'Retainer Fitting',
   'Bite Alignment Check',
   'Tooth Pain / Emergency',
+  'Other',
 ]
 
 const monthFormatted = computed<string>(() => {
@@ -67,7 +71,10 @@ const isCurrentOrPastMonth = computed<boolean>(() => {
 })
 
 const availableDays = computed<DayAvailability[]>(() => {
-  return doctorStore.availability?.days || []
+  const availability = doctorStore.availability
+  return availability && availability.doctor_id === doctorStore.selectedDoctor?.id && availability.month === monthFormatted.value
+    ? availability.days
+    : []
 })
 
 const selectedDayData = computed<DayAvailability | undefined>(() => {
@@ -88,6 +95,7 @@ const formattedSelectedDateDisplay = computed<string>(() => {
 })
 
 onMounted(async () => {
+  const previousDoctor = doctorStore.selectedDoctor
   if (doctorStore.doctors.length === 0) {
     await doctorStore.fetchPublicDoctors().catch(() => {})
   }
@@ -108,7 +116,7 @@ onMounted(async () => {
     }
   }
 
-  if (doctorStore.selectedDoctor) {
+  if (doctorStore.selectedDoctor && doctorStore.selectedDoctor === previousDoctor) {
     await loadAvailability()
   }
 })
@@ -125,6 +133,7 @@ watch(
 
 async function loadAvailability() {
   if (!doctorStore.selectedDoctor) return
+  selectedDate.value = ''
   try {
     await doctorStore.fetchDoctorAvailability(doctorStore.selectedDoctor.id, monthFormatted.value)
     if (availableDays.value.length > 0) {
@@ -168,9 +177,10 @@ async function handleNextMonth() {
   await loadAvailability()
 }
 
-function handleSelectDoctor(doctor: DoctorPublicResponse) {
-  doctorStore.selectDoctor(doctor)
-  showDoctorPicker.value = false
+function handleSelectDoctor(event: Event) {
+  const id = Number((event.target as HTMLSelectElement).value)
+  const doctor = doctorStore.activeDoctors.find((option) => option.id === id)
+  if (doctor) doctorStore.selectDoctor(doctor)
 }
 
 function handleSelectDay(dateStr: string) {
@@ -184,7 +194,7 @@ function handleSelectSlot(slot: TimeSlot) {
 }
 
 async function handleConfirmBooking() {
-  if (!doctorStore.selectedDoctor || !selectedSlot.value) return
+  if (!doctorStore.selectedDoctor || !selectedSlot.value || !reasonForVisit.value || isSubmitting.value) return
   isSubmitting.value = true
   try {
     const res = await appointmentStore.bookAppointment({
@@ -201,10 +211,20 @@ async function handleConfirmBooking() {
   }
 }
 
+async function selectReason(reason: string) {
+  selectedReason.value = reason
+  if (reason === 'Other') {
+    await nextTick()
+    otherReasonInput.value?.focus()
+  }
+}
+
 function handleBookAnother() {
   bookingSuccessData.value = null
   selectedSlot.value = null
   notes.value = ''
+  selectedReason.value = 'Orthodontic Consultation'
+  otherReason.value = ''
   loadAvailability()
 }
 </script>
@@ -281,41 +301,24 @@ function handleBookAnother() {
               <Stethoscope class="w-5 h-5 text-teal-600" />
               Assigned Specialist
             </h2>
-            <button
-              type="button"
-              @click="showDoctorPicker = !showDoctorPicker"
-              class="text-xs font-semibold text-teal-600 hover:text-teal-700 cursor-pointer"
-            >
-              {{ showDoctorPicker ? 'Close Picker' : 'Change Specialist' }}
-            </button>
           </div>
 
-          <div v-if="showDoctorPicker" class="mb-5 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
-            <div
-              v-for="doc in doctorStore.activeDoctors"
-              :key="doc.id"
-              @click="handleSelectDoctor(doc)"
-              :class="[
-                'p-3 rounded-xl border cursor-pointer transition flex items-center gap-3',
-                doctorStore.selectedDoctor?.id === doc.id
-                  ? 'border-teal-500 bg-teal-50/50 shadow-xs ring-1 ring-teal-500'
-                  : 'border-slate-200 bg-white hover:border-teal-300'
-              ]"
-            >
-              <img
-                v-if="doc.photo_url"
-                :src="doc.photo_url"
-                :alt="doc.full_name"
-                class="w-11 h-11 rounded-full object-cover border border-slate-200"
-              />
-              <div v-else class="w-11 h-11 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm">
-                {{ doc.full_name.charAt(0) }}
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="text-xs font-bold text-slate-900 truncate">{{ doc.full_name }}</p>
-                <p class="text-[11px] text-teal-700 truncate font-medium">{{ doc.specialty }}</p>
-                <p class="text-[11px] text-slate-500">{{ consultationFeeFormat.format(Number(doc.consultation_fee)) }} fee</p>
-              </div>
+          <div class="mb-5 max-w-sm">
+            <label for="booking-doctor" class="app-form-label">Doctor</label>
+            <div class="relative">
+              <select
+                id="booking-doctor"
+                :value="doctorStore.selectedDoctor?.id ?? ''"
+                :disabled="doctorStore.isLoading || !doctorStore.activeDoctors.length"
+                class="w-full appearance-none rounded-lg border border-slate-300 bg-white py-2.5 pr-10 pl-3 text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 disabled:bg-slate-50 disabled:text-slate-500"
+                @change="handleSelectDoctor"
+              >
+                <option value="" disabled>Choose a doctor</option>
+                <option v-for="doctor in doctorStore.activeDoctors" :key="doctor.id" :value="doctor.id">
+                  {{ doctor.full_name }} &middot; {{ doctor.specialty }} &middot; {{ consultationFeeFormat.format(Number(doctor.consultation_fee)) }}
+                </option>
+              </select>
+              <ChevronDown class="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
             </div>
           </div>
 
@@ -350,7 +353,7 @@ function handleBookAnother() {
 
           <div v-else class="text-center py-6 text-slate-500 text-sm">
             <User class="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            No specialist selected. Click "Change Specialist" to choose one.
+            Choose a doctor to view their schedule.
           </div>
         </div>
 
@@ -464,10 +467,11 @@ function handleBookAnother() {
                 v-for="r in commonReasons"
                 :key="r"
                 type="button"
-                @click="reasonForVisit = r"
+                :aria-pressed="selectedReason === r"
+                @click="selectReason(r)"
                 :class="[
                   'px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer',
-                  reasonForVisit === r
+                  selectedReason === r
                     ? 'bg-teal-600 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 ]"
@@ -475,13 +479,19 @@ function handleBookAnother() {
                 {{ r }}
               </button>
             </div>
-            <input
-              v-model="reasonForVisit"
-              type="text"
-              required
-              class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-              placeholder="e.g. Braces adjustment, initial consultation"
-            />
+            <div v-if="selectedReason === 'Other'">
+              <label for="consultation-other" class="app-form-label">Other reason</label>
+              <input
+                id="consultation-other"
+                ref="otherReasonInput"
+                v-model="otherReason"
+                type="text"
+                maxlength="255"
+                required
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                placeholder="Describe your reason for visiting"
+              />
+            </div>
           </div>
 
           <div class="space-y-1.5">

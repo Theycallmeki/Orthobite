@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import AppBrand from '@/components/AppBrand.vue'
@@ -24,11 +24,12 @@ const router = useRouter()
 const route = useRoute()
 
 onMounted(() => {
-  if (authStore.isAuthenticated) {
+  if (authStore.isPatient || authStore.isSecretary) {
     chatStore.connectWebSocket()
     chatStore.fetchConversations().catch(() => {})
   }
 })
+onBeforeUnmount(chatStore.resetChat)
 
 const navLinks = computed(() => {
   const links: Array<{ name: string; path: string; icon: typeof Calendar; badge?: number }> = []
@@ -50,15 +51,16 @@ const navLinks = computed(() => {
     links.push(
       { name: 'Appointments', path: '/clinic/appointments', icon: Calendar },
       { name: 'Patient Records', path: '/clinic/records', icon: ClipboardList },
-      {
-        name: 'Live Chat',
-        path: '/portal/chat',
-        icon: MessageSquare,
-        badge: chatStore.totalUnreadCount,
-      },
     )
     if (authStore.isDoctor) {
       links.push({ name: 'Consultation Fee', path: '/clinic/consultation-fee', icon: Wallet })
+    } else {
+      links.push({
+        name: 'Live Chat',
+        path: '/clinic/chat',
+        icon: MessageSquare,
+        badge: chatStore.totalUnreadCount,
+      })
     }
   } else if (authStore.isAdmin) {
     links.push(
@@ -66,12 +68,6 @@ const navLinks = computed(() => {
       { name: 'Audit Logs', path: '/admin/audit', icon: ShieldCheck },
       { name: 'Appointments', path: '/clinic/appointments', icon: Calendar },
       { name: 'Patient Records', path: '/clinic/records', icon: ClipboardList },
-      {
-        name: 'Live Chat',
-        path: '/portal/chat',
-        icon: MessageSquare,
-        badge: chatStore.totalUnreadCount,
-      },
     )
   }
 
@@ -79,7 +75,7 @@ const navLinks = computed(() => {
 })
 
 function handleLogout() {
-  chatStore.disconnectWebSocket()
+  chatStore.resetChat()
   authStore.logout()
   router.push('/login')
 }
