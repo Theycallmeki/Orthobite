@@ -33,7 +33,7 @@ def list_doctors(db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/{doctor_id}/availability",
+    "/{doctor_id:int}/availability",
     response_model=DoctorAvailabilityResponse,
     summary="Get doctor availability calendar slots (Public)",
 )
@@ -151,3 +151,13 @@ def list_my_time_off(
     """List scheduled leaves and blocked ranges."""
     profile = doctor_controller.get_or_create_doctor_profile_for_user(db, current_user)
     return doctor_controller.list_doctor_time_off(db, profile.id)
+
+
+@router.delete("/me/time-off/{time_off_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_my_time_off(
+    time_off_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_doctor),
+):
+    profile = doctor_controller.get_or_create_doctor_profile_for_user(db, current_user)
+    doctor_controller.remove_doctor_time_off(db, profile.id, time_off_id)

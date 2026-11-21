@@ -2,10 +2,13 @@ import logging
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+from config.settings import settings
 
 logger = logging.getLogger("orthobite.appointment")
 
@@ -364,11 +367,12 @@ def list_secretary_appointments(
         )
 
     if target_date:
-        start_of_day = datetime.combine(target_date, time.min)
-        end_of_day = datetime.combine(target_date, time.max)
+        clinic_timezone = ZoneInfo(settings.CLINIC_TIMEZONE)
+        start_of_day = datetime.combine(target_date, time.min, tzinfo=clinic_timezone)
+        next_day = datetime.combine(target_date + timedelta(days=1), time.min, tzinfo=clinic_timezone)
         query = query.filter(
             Appointment.start_time >= start_of_day,
-            Appointment.start_time <= end_of_day,
+            Appointment.start_time < next_day,
         )
 
     if doctor_id:

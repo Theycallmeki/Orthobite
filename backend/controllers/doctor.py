@@ -197,6 +197,13 @@ def list_doctor_time_off(db: Session, doctor_id: int) -> List[TimeOffResponse]:
     return [TimeOffResponse.model_validate(r) for r in records]
 
 
+def remove_doctor_time_off(db: Session, doctor_id: int, time_off_id: int) -> None:
+    removed = db.query(TimeOff).filter(TimeOff.doctor_id == doctor_id, TimeOff.id == time_off_id).delete()
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Time-off block not found.")
+    db.commit()
+
+
 def generate_doctor_availability(
     db: Session,
     doctor_id: int,

@@ -167,16 +167,20 @@ class TestPhase2Doctor:
         state["doctor_token"] = resp2.json()["access_token"]
 
     def test_set_availability_rules(self, client):
+        headers = {"Authorization": f"Bearer {state['doctor_token']}"}
         resp = client.put(
             "/doctors/me/availability",
             json={"rules": [
                 {"day_of_week": 1, "start_time": "09:00:00", "end_time": "17:00:00",
                  "slot_duration_minutes": 30, "is_active": True},
             ]},
-            headers={"Authorization": f"Bearer {state['doctor_token']}"},
+            headers=headers,
         )
         assert resp.status_code == 200
         assert len(resp.json()) >= 1
+        weekly_rules = client.get("/doctors/me/availability", headers=headers)
+        assert weekly_rules.status_code == 200
+        assert weekly_rules.json() == resp.json()
 
 
 class TestPhase3Appointments:

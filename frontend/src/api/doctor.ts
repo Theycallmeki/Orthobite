@@ -123,6 +123,10 @@ export const doctorsApi = {
   listMyTimeOff(): Promise<AxiosResponse<TimeOff[]>> {
     return apiClient.get('/doctors/me/time-off')
   },
+
+  removeTimeOff(id: number): Promise<AxiosResponse<void>> {
+    return apiClient.delete(`/doctors/me/time-off/${id}`)
+  },
 }
 
 export default doctorsApi

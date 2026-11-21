@@ -95,6 +95,12 @@ const routes: RouteRecordRaw[] = [
         meta: { roles: ['doctor', 'orthodontist'] },
       },
       {
+        path: 'availability',
+        name: 'clinic-availability',
+        component: () => import('@/views/clinic/DoctorAvailabilityView.vue'),
+        meta: { roles: ['doctor', 'orthodontist'] },
+      },
+      {
         path: 'chat',
         name: 'clinic-chat',
         component: ChatView,
