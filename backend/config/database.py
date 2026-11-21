@@ -5,8 +5,8 @@ from config.settings import settings
 
 
 db_url = settings.DATABASE_URL
-if db_url and db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+if db_url.startswith(("postgres://", "postgresql://")):
+    db_url = "postgresql+psycopg://" + db_url.split("://", 1)[1]
 
 
 connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}

@@ -12,15 +12,8 @@ import ChatView from '@/views/chat/ChatView.vue'
 import AppointmentsScheduleView from '@/views/clinic/AppointmentsScheduleView.vue'
 import PatientRecordEditorView from '@/views/clinic/PatientRecordEditorView.vue'
 import AnalyticsDashboardView from '@/views/admin/AnalyticsDashboardView.vue'
+import AuditTrailView from '@/views/admin/AuditTrailView.vue'
 
-const PortalPlaceholder = {
-  template: `
-    <div class="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-xs">
-      <h2 class="text-xl font-bold text-slate-800 mb-2">Workspace Module</h2>
-      <p class="text-sm text-slate-500">Module content will mount here.</p>
-    </div>
-  `,
-}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -130,7 +123,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'audit',
         name: 'admin-audit',
-        component: PortalPlaceholder,
+        component: AuditTrailView,
       },
     ],
   },
@@ -182,11 +175,13 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
-  const allowedRoles = to.matched
-    .flatMap((record) => (record.meta.roles as string[]) || [])
-    .filter(Boolean)
+  const role = authStore.role
+  const isRoleRestricted = to.matched.some((record) => {
+    const allowedRoles = record.meta.roles as string[] | undefined
+    return allowedRoles !== undefined && (!role || !allowedRoles.includes(role))
+  })
 
-  if (allowedRoles.length > 0 && authStore.role && !allowedRoles.includes(authStore.role)) {
+  if (isRoleRestricted) {
     if (authStore.isAdmin) {
       next('/admin/analytics')
     } else if (authStore.isDoctor || authStore.isSecretary) {
