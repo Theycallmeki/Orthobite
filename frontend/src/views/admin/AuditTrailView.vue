@@ -159,7 +159,7 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+    <div class="app-panel app-page-heading">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-2 mb-1">
@@ -250,7 +250,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
+    <div class="app-panel p-5 space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-slate-100">
         <div class="flex items-center gap-2 text-sm font-bold text-slate-800">
           <Filter class="w-4 h-4 text-indigo-600" />
@@ -341,7 +341,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+    <div class="app-panel overflow-hidden">
       <div v-if="adminStore.isLoading && adminStore.auditLogs.length === 0" class="py-16 text-center">
         <RefreshCw class="w-6 h-6 animate-spin text-indigo-600 mx-auto mb-2" />
         <p class="text-xs text-slate-500">Querying compliance audit logs...</p>

@@ -209,7 +209,7 @@ function handleBookAnother() {
 
 <template>
   <div class="max-w-6xl mx-auto space-y-8 pb-12">
-    <div>
+    <div class="app-panel app-page-heading">
       <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
         Book an Orthodontic Appointment
       </h1>
@@ -273,7 +273,7 @@ function handleBookAnother() {
 
     <div v-else class="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <div class="lg:col-span-8 space-y-6">
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs">
+        <div class="app-panel p-6">
           <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
             <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
               <Stethoscope class="w-5 h-5 text-teal-600" />
@@ -352,7 +352,7 @@ function handleBookAnother() {
           </div>
         </div>
 
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-6">
+        <div class="app-panel p-6 space-y-6">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <Calendar class="w-5 h-5 text-teal-600" />
@@ -475,7 +475,7 @@ function handleBookAnother() {
       </div>
 
       <div class="lg:col-span-4 space-y-6">
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5 sticky top-24">
+        <div class="app-panel p-6 space-y-5 sticky top-24">
           <div class="flex items-center gap-2 pb-3 border-b border-slate-100">
             <FileText class="w-5 h-5 text-teal-600" />
             <h2 class="text-base font-bold text-slate-900">Consultation Details</h2>
@@ -552,7 +552,7 @@ function handleBookAnother() {
               'w-full py-3.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition shadow-md',
               !doctorStore.selectedDoctor || !selectedSlot || !reasonForVisit.trim() || isSubmitting
                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-600/25 cursor-pointer active:scale-98'
+                : 'app-primary-action shadow-teal-600/25 cursor-pointer active:scale-98'
             ]"
           >
             <Loader2 v-if="isSubmitting" class="w-4 h-4 animate-spin" />

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import Button from 'primevue/button'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAuthStore } from '@/stores/auth'
 import type { DoctorPublicResponse } from '@/api/doctor'
@@ -8,7 +9,6 @@ import {
   Calendar,
   Award,
   GraduationCap,
-  Sparkles,
   BookOpen,
   ChevronRight,
   UserCheck,
@@ -49,38 +49,29 @@ function handleBookDoctor(doctor: DoctorPublicResponse) {
 
 <template>
   <div class="space-y-8">
-    <div class="bg-gradient-to-r from-teal-700 via-teal-800 to-slate-900 rounded-3xl p-8 text-white shadow-xl shadow-teal-900/10 relative overflow-hidden">
-      <div class="absolute -right-12 -top-12 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-      <div class="relative z-10 max-w-2xl space-y-3">
-        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/20 text-teal-200 text-xs font-semibold backdrop-blur-xs">
-          <Sparkles class="w-3.5 h-3.5 text-teal-300" />
-          Patient Workspace
-        </span>
-
-        <h1 class="text-3xl font-extrabold tracking-tight">
+    <div class="app-panel app-page-heading">
+      <div class="max-w-2xl space-y-3">
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">
           Welcome, {{ authStore.user?.full_name || 'Patient' }}
         </h1>
 
-        <p class="text-teal-100 text-sm leading-relaxed">
+        <p class="text-sm leading-relaxed text-slate-600">
           Book orthodontic consultations, discover dental specialists, track procedure history, and communicate in real time with our clinical care team.
         </p>
 
         <div class="pt-3 flex flex-wrap gap-3">
-          <router-link
-            to="/portal/book"
-            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-teal-950 font-semibold text-sm hover:bg-teal-50 transition-colors shadow-sm"
-          >
-            <Calendar class="w-4 h-4 text-teal-700" />
-            Book Consultation
-          </router-link>
-          <router-link
-            to="/portal/records"
-            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-800/80 hover:bg-teal-800 text-white font-medium text-sm transition-colors border border-teal-600/30"
-          >
-            <BookOpen class="w-4 h-4" />
-            Treatment Ledger
-          </router-link>
+          <RouterLink v-slot="{ href, navigate }" to="/portal/book" custom>
+            <Button as="a" :href="href" size="small" @click="navigate">
+              <Calendar class="size-4" aria-hidden="true" />
+              Book Consultation
+            </Button>
+          </RouterLink>
+          <RouterLink v-slot="{ href, navigate }" to="/portal/records" custom>
+            <Button as="a" :href="href" size="small" severity="secondary" outlined @click="navigate">
+              <BookOpen class="size-4" aria-hidden="true" />
+              Treatment Ledger
+            </Button>
+          </RouterLink>
         </div>
       </div>
     </div>
@@ -108,7 +99,7 @@ function handleBookDoctor(doctor: DoctorPublicResponse) {
       </div>
 
       <div v-if="doctorStore.isLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div v-for="i in 3" :key="i" class="bg-white rounded-2xl border border-slate-200 p-6 animate-pulse space-y-4">
+        <div v-for="i in 3" :key="i" class="app-panel p-6 animate-pulse space-y-4">
           <div class="flex items-center gap-4">
             <div class="w-14 h-14 bg-slate-200 rounded-2xl"></div>
             <div class="space-y-2 flex-1">
@@ -122,7 +113,7 @@ function handleBookDoctor(doctor: DoctorPublicResponse) {
 
       <div
         v-else-if="filteredDoctors.length === 0"
-        class="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-2"
+        class="app-panel p-12 text-center space-y-2"
       >
         <UserCheck class="w-10 h-10 text-slate-300 mx-auto" />
         <h3 class="text-sm font-semibold text-slate-800">No specialists found</h3>
@@ -135,7 +126,7 @@ function handleBookDoctor(doctor: DoctorPublicResponse) {
         <div
           v-for="doctor in filteredDoctors"
           :key="doctor.id"
-          class="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 group"
+          class="app-panel p-6 flex flex-col justify-between hover:shadow-md transition-all duration-200 group"
         >
           <div class="space-y-4">
             <div class="flex items-start gap-4">
@@ -175,7 +166,7 @@ function handleBookDoctor(doctor: DoctorPublicResponse) {
 
             <button
               @click="handleBookDoctor(doctor)"
-              class="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
+              class="inline-flex items-center gap-1.5 px-4 py-2 app-primary-action text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <span>Book Visit</span>
               <ChevronRight class="w-3.5 h-3.5" />

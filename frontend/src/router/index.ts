@@ -1,36 +1,17 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AuthLayout from '@/layouts/AuthLayout.vue'
-import AppLayout from '@/layouts/AppLayout.vue'
+import LandingPageView from '@/views/LandingPageView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
-import RegisterView from '@/views/auth/RegisterView.vue'
-import DoctorCarouselView from '@/views/patient/DoctorCarouselView.vue'
-import BookAppointmentView from '@/views/patient/BookAppointmentView.vue'
-import MyAppointmentsView from '@/views/patient/MyAppointmentsView.vue'
-import TreatmentBookletView from '@/views/patient/TreatmentBookletView.vue'
-import ChatView from '@/views/chat/ChatView.vue'
-import AppointmentsScheduleView from '@/views/clinic/AppointmentsScheduleView.vue'
-import PatientRecordEditorView from '@/views/clinic/PatientRecordEditorView.vue'
-import AnalyticsDashboardView from '@/views/admin/AnalyticsDashboardView.vue'
-import AuditTrailView from '@/views/admin/AuditTrailView.vue'
 
+const AppLayout = () => import('@/layouts/AppLayout.vue')
+const ChatView = () => import('@/views/chat/ChatView.vue')
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: () => {
-      const authStore = useAuthStore()
-      if (!authStore.isAuthenticated) {
-        return '/login'
-      }
-      if (authStore.isAdmin) {
-        return '/admin/analytics'
-      }
-      if (authStore.isDoctor || authStore.isSecretary) {
-        return '/clinic/appointments'
-      }
-      return '/portal'
-    },
+    name: 'home',
+    component: LandingPageView,
   },
   {
     path: '/auth',
@@ -45,7 +26,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: '/register',
         name: 'register',
-        component: RegisterView,
+        component: () => import('@/views/auth/RegisterView.vue'),
         meta: { guestOnly: true },
       },
     ],
@@ -58,25 +39,25 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'portal-dashboard',
-        component: DoctorCarouselView,
+        component: () => import('@/views/patient/DoctorCarouselView.vue'),
         meta: { roles: ['patient', 'admin'] },
       },
       {
         path: 'book',
         name: 'portal-book',
-        component: BookAppointmentView,
+        component: () => import('@/views/patient/BookAppointmentView.vue'),
         meta: { roles: ['patient', 'admin'] },
       },
       {
         path: 'appointments',
         name: 'portal-appointments',
-        component: MyAppointmentsView,
+        component: () => import('@/views/patient/MyAppointmentsView.vue'),
         meta: { roles: ['patient', 'admin'] },
       },
       {
         path: 'records',
         name: 'portal-records',
-        component: TreatmentBookletView,
+        component: () => import('@/views/patient/TreatmentBookletView.vue'),
         meta: { roles: ['patient', 'admin'] },
       },
       {
@@ -95,12 +76,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'appointments',
         name: 'clinic-appointments',
-        component: AppointmentsScheduleView,
+        component: () => import('@/views/clinic/AppointmentsScheduleView.vue'),
       },
       {
         path: 'records',
         name: 'clinic-records',
-        component: PatientRecordEditorView,
+        component: () => import('@/views/clinic/PatientRecordEditorView.vue'),
       },
       {
         path: 'chat',
@@ -118,12 +99,12 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'analytics',
         name: 'admin-analytics',
-        component: AnalyticsDashboardView,
+        component: () => import('@/views/admin/AnalyticsDashboardView.vue'),
       },
       {
         path: 'audit',
         name: 'admin-audit',
-        component: AuditTrailView,
+        component: () => import('@/views/admin/AuditTrailView.vue'),
       },
     ],
   },

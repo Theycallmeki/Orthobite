@@ -241,7 +241,7 @@ async function handleSaveTreatmentRecord() {
 
 <template>
   <div class="space-y-8 pb-16">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="app-panel app-page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           Clinical Treatment Record Editor
@@ -273,7 +273,7 @@ async function handleSaveTreatmentRecord() {
       </div>
     </div>
 
-    <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-4">
+    <div class="app-panel p-5 space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div class="flex items-center gap-2">
           <User class="w-5 h-5 text-teal-600" />
@@ -319,7 +319,7 @@ async function handleSaveTreatmentRecord() {
     </div>
 
     <div v-if="selectedPatient" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs">
+      <div class="app-panel p-5">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Billed Procedures</span>
         <span class="text-2xl font-black text-slate-900 mt-1 block">
           {{ formatCurrency(recordStore.totalValueOfWork) }}
@@ -353,7 +353,7 @@ async function handleSaveTreatmentRecord() {
       </div>
     </div>
 
-    <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+    <div class="app-panel p-6 space-y-4">
       <div class="flex items-center gap-2 pb-2 border-b border-slate-100">
         <Layers class="w-5 h-5 text-teal-600" />
         <div>
@@ -366,7 +366,7 @@ async function handleSaveTreatmentRecord() {
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      <div class="lg:col-span-7 bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-5">
+      <div class="lg:col-span-7 app-panel p-6 space-y-5">
         <div class="flex items-center gap-2 pb-3 border-b border-slate-100">
           <FileText class="w-5 h-5 text-teal-600" />
           <h2 class="text-sm font-extrabold text-slate-900">Treatment Procedure Details</h2>
@@ -468,7 +468,7 @@ async function handleSaveTreatmentRecord() {
       </div>
 
       <div class="lg:col-span-5 space-y-6">
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <div class="app-panel p-6 space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center gap-2">
               <PenLine class="w-5 h-5 text-teal-600" />
@@ -491,7 +491,7 @@ async function handleSaveTreatmentRecord() {
           />
         </div>
 
-        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <div class="app-panel p-6 space-y-4">
           <div class="flex items-center justify-between pb-3 border-b border-slate-100">
             <div class="flex items-center gap-2">
               <CreditCard class="w-5 h-5 text-teal-600" />
@@ -563,7 +563,7 @@ async function handleSaveTreatmentRecord() {
           type="button"
           @click="handleSaveTreatmentRecord"
           :disabled="isSubmitting || !selectedPatient || !treatmentName.trim() || valueOfWork === ''"
-          class="w-full py-4 px-6 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-sm transition shadow-lg shadow-teal-600/25 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-98"
+          class="w-full py-4 px-6 rounded-2xl app-primary-action font-extrabold text-sm transition shadow-lg shadow-teal-600/25 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-98"
         >
           <Loader2 v-if="isSubmitting" class="w-4 h-4 animate-spin" />
           <CheckCircle2 v-else class="w-4 h-4" />
@@ -572,7 +572,7 @@ async function handleSaveTreatmentRecord() {
       </div>
     </div>
 
-    <div v-if="selectedPatient" class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+    <div v-if="selectedPatient" class="app-panel p-6 space-y-4">
       <div class="flex items-center justify-between pb-3 border-b border-slate-100">
         <div class="flex items-center gap-2">
           <BookOpen class="w-5 h-5 text-teal-600" />

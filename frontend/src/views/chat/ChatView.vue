@@ -161,13 +161,13 @@ async function handleStartNewChat() {
 
 <template>
   <div class="h-[calc(100vh-140px)] flex flex-col space-y-4">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs shrink-0">
+    <div class="app-panel app-page-heading flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
           <MessageSquare class="w-5 h-5" />
         </div>
         <div>
-          <h1 class="text-base font-extrabold text-slate-900 leading-tight">Live Clinical Consultation Chat</h1>
+          <h1 class="text-xl font-bold leading-tight text-slate-900">Live Clinical Consultation Chat</h1>
           <p class="text-xs text-slate-500">Real-time encrypted communication with the care team</p>
         </div>
       </div>
@@ -210,7 +210,7 @@ async function handleStartNewChat() {
       </div>
     </div>
 
-    <div class="flex-1 bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-0">
+    <div class="app-panel grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-12">
       <div class="md:col-span-4 border-r border-slate-200 flex flex-col h-full bg-slate-50/50">
         <div class="p-3.5 border-b border-slate-200 space-y-2">
           <div class="relative">
@@ -227,7 +227,7 @@ async function handleStartNewChat() {
             <button
               type="button"
               @click="handleStartNewChat"
-              class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition cursor-pointer shadow-xs"
+              class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl app-primary-action font-semibold text-xs transition cursor-pointer shadow-xs"
             >
               <Plus class="w-4 h-4" />
               Start Clinical Consultation
@@ -409,7 +409,7 @@ async function handleStartNewChat() {
               <button
                 type="submit"
                 :disabled="!messageText.trim() || isSending"
-                class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition cursor-pointer shadow-sm shadow-teal-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl app-primary-action font-semibold text-xs transition cursor-pointer shadow-sm shadow-teal-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Send class="w-4 h-4" />
                 <span class="hidden sm:inline">Send</span>

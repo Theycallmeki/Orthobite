@@ -74,7 +74,7 @@ function handlePrint() {
 
 <template>
   <div class="space-y-8 pb-16 print:p-0 print:space-y-4">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 print:hidden">
+    <div class="app-panel app-page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
       <div>
         <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           Treatment Booklet & Financial Ledger
@@ -120,7 +120,7 @@ function handlePrint() {
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs relative overflow-hidden">
+      <div class="app-panel p-6 relative overflow-hidden">
         <div class="flex items-center justify-between">
           <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Value of Work</span>
           <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
@@ -228,7 +228,7 @@ function handlePrint() {
     </div>
 
     <div v-else-if="activeSection === 'treatments' || !activeSection" class="space-y-4">
-      <div v-if="treatments.length === 0" class="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-lg mx-auto space-y-3">
+      <div v-if="treatments.length === 0" class="app-panel p-12 text-center max-w-lg mx-auto space-y-3">
         <div class="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
           <BookOpen class="w-7 h-7" />
         </div>
@@ -241,7 +241,7 @@ function handlePrint() {
       <div
         v-for="record in treatments"
         :key="record.id"
-        class="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-md transition-shadow space-y-4"
+        class="app-panel p-6 hover:shadow-md transition-shadow space-y-4"
       >
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div class="flex items-center gap-3">
@@ -343,7 +343,7 @@ function handlePrint() {
     </div>
 
     <div v-if="activeSection === 'payments'" class="space-y-4">
-      <div v-if="allPayments.length === 0" class="bg-white rounded-3xl border border-slate-200 p-12 text-center max-w-lg mx-auto space-y-3">
+      <div v-if="allPayments.length === 0" class="app-panel p-12 text-center max-w-lg mx-auto space-y-3">
         <div class="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
           <Receipt class="w-7 h-7" />
         </div>
@@ -353,7 +353,7 @@ function handlePrint() {
         </p>
       </div>
 
-      <div v-else class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+      <div v-else class="app-panel overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-xs text-left">
             <thead class="text-slate-400 bg-slate-50 uppercase tracking-wider font-semibold text-[10px] border-b border-slate-100">

@@ -1,3 +1,4 @@
+@layer theme, base, primevue, components, utilities;
 @import "tailwindcss";
 
 :root {
@@ -7,7 +8,70 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: var(--p-surface-50, #f8fafc);
+  color: var(--p-surface-900, #0f172a);
   min-height: 100vh;
+}
+
+@layer components {
+  .app-backdrop {
+    background: linear-gradient(
+      135deg,
+      var(--p-primary-50, #f0fdfa),
+      var(--p-surface-50, #f8fafc) 55%,
+      #ecfeff
+    );
+  }
+
+  .app-panel {
+    background-color: var(--p-surface-0, #fff);
+    border: 1px solid var(--p-surface-200, #e2e8f0);
+    border-radius: 1rem;
+    box-shadow: 0 10px 24px -18px rgb(15 23 42 / 28%);
+  }
+
+  .app-page-heading {
+    padding: clamp(1rem, 3vw, 1.5rem);
+  }
+
+  .app-form-label {
+    display: block;
+    margin-bottom: 0.375rem;
+    color: var(--p-surface-700, #334155);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .app-field {
+    background-color: var(--p-form-field-background, #fff);
+    border: 1px solid var(--p-form-field-border-color, #cbd5e1);
+    border-radius: var(--p-form-field-border-radius, 0.5rem);
+    color: var(--p-form-field-color, #0f172a);
+  }
+
+  .app-field:focus-visible {
+    border-color: var(--p-primary-color, #0f766e);
+    outline: 2px solid var(--p-primary-100, #ccfbf1);
+    outline-offset: 1px;
+  }
+
+  .app-primary-action {
+    background-color: var(--p-primary-color, #0f766e);
+    color: var(--p-primary-contrast-color, #fff);
+  }
+
+  .app-primary-action:hover:not(:disabled) {
+    background-color: var(--p-primary-hover-color, #115e59);
+  }
+
+  .app-primary-action:focus-visible {
+    outline: 2px solid var(--p-primary-color, #0f766e);
+    outline-offset: 2px;
+  }
+}
+
+@media print {
+  .app-backdrop {
+    background: white;
+  }
 }
