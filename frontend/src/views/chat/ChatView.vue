@@ -198,7 +198,7 @@ async function handleStartNewChat() {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-140px)] flex flex-col space-y-4">
+  <div class="h-[calc(100dvh-140px)] min-h-[28rem] flex flex-col space-y-4">
     <div class="app-panel app-page-heading flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold">
@@ -249,9 +249,9 @@ async function handleStartNewChat() {
     </div>
 
     <p v-if="chatStore.error && !deleteTarget" role="alert" class="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{{ chatStore.error }}</p>
-    <div class="app-panel grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-12">
-      <div class="md:col-span-4 border-r border-slate-200 flex flex-col h-full bg-slate-50/50">
-        <div class="p-3.5 border-b border-slate-200 space-y-2">
+    <div class="app-panel grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden md:grid-cols-12 md:grid-rows-1">
+      <div class="flex min-h-0 max-h-40 flex-col border-b border-slate-200 bg-slate-50/50 md:col-span-4 md:max-h-none md:border-r md:border-b-0">
+        <div class="shrink-0 p-3.5 border-b border-slate-200 space-y-2">
           <div class="relative">
             <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -275,7 +275,7 @@ async function handleStartNewChat() {
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto divide-y divide-slate-100">
+        <div class="min-h-0 flex-1 overflow-y-auto divide-y divide-slate-100">
           <div
             v-if="filteredConversations.length === 0"
             class="p-8 text-center text-xs text-slate-400 space-y-2"
@@ -330,8 +330,8 @@ async function handleStartNewChat() {
         </div>
       </div>
 
-      <div class="md:col-span-8 flex flex-col h-full bg-white">
-        <div v-if="chatStore.activeConversation" class="flex flex-col h-full">
+      <div class="flex min-h-0 min-w-0 flex-col bg-white md:col-span-8">
+        <div v-if="chatStore.activeConversation" class="flex min-h-0 flex-1 flex-col">
           <div class="p-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-full bg-teal-700 text-white flex items-center justify-center font-bold text-sm shadow-xs">
@@ -385,7 +385,7 @@ async function handleStartNewChat() {
 
           <div
             ref="messageContainer"
-            class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/30"
+            class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-50/30"
           >
             <div v-if="chatStore.isLoading && chatStore.activeMessages.length === 0" class="py-12 text-center text-slate-400">
               <Loader2 class="w-6 h-6 animate-spin mx-auto text-teal-600 mb-2" />
@@ -470,6 +470,7 @@ async function handleStartNewChat() {
 
               <button
                 type="submit"
+                aria-label="Send"
                 :disabled="(!messageText.trim() && !selectedImage) || isSending"
                 class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl app-primary-action font-semibold text-xs transition cursor-pointer shadow-sm shadow-teal-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
               >

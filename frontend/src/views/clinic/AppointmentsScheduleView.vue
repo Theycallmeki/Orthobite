@@ -33,9 +33,26 @@ import {
 const appointmentStore = useAppointmentStore()
 const doctorStore = useDoctorStore()
 const authStore = useAuthStore()
+const canScheduleWalkIn = computed(() => authStore.isSecretary || authStore.isAdmin)
 
-const showUpcoming = ref(authStore.isSecretary)
-const selectedDate = ref<string>(new Date().toISOString().split('T')[0] || '')
+const clinicTimeZone = 'Asia/Manila'
+const clinicDateFormat = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: clinicTimeZone,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+const timestampOffset = /(?:Z|[+-]\d{2}:\d{2})$/i
+const scheduleViews = [
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'by-date', label: 'By date' },
+  { value: 'completed', label: 'Completed' },
+] as const
+type ScheduleView = typeof scheduleViews[number]['value']
+const scheduleView = ref<ScheduleView>(authStore.isSecretary ? 'upcoming' : 'by-date')
+const showUpcoming = computed(() => scheduleView.value === 'upcoming')
+const showCompleted = computed(() => scheduleView.value === 'completed')
+const selectedDate = ref(clinicDateFormat.format())
 const selectedDoctorId = ref<number | 'all'>('all')
 const statusFilter = ref<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all')
 const searchQuery = ref<string>('')
@@ -72,7 +89,7 @@ onMounted(async () => {
   await fetchSchedule()
 })
 
-watch([showUpcoming, selectedDate, selectedDoctorId], async () => {
+watch([scheduleView, selectedDate, selectedDoctorId], async () => {
   await fetchSchedule()
 })
 
@@ -80,8 +97,9 @@ async function fetchSchedule() {
   const params: AppointmentQueryParams = {}
   if (showUpcoming.value) {
     params.upcoming_only = true
-  } else if (selectedDate.value) {
-    params.date = selectedDate.value
+  } else {
+    params.date = selectedDate.value || clinicDateFormat.format()
+    if (showCompleted.value) params.status = 'completed'
   }
   if (selectedDoctorId.value !== 'all') {
     params.doctor_id = Number(selectedDoctorId.value)
@@ -97,8 +115,10 @@ const scheduleAppointments = computed(() => {
 
   if (showUpcoming.value) {
     list = list.filter((a) => a.status === 'pending' || a.status === 'confirmed')
-  } else if (selectedDate.value) {
-    list = list.filter((a) => a.start_time.startsWith(selectedDate.value))
+  } else {
+    const date = selectedDate.value || clinicDateFormat.format()
+    list = list.filter((a) => getAppointmentDate(a.start_time) === date)
+    if (showCompleted.value) list = list.filter((a) => a.status === 'completed')
   }
 
   if (selectedDoctorId.value !== 'all') {
@@ -146,35 +166,32 @@ const countConfirmed = computed(() => scheduleAppointments.value.filter((a) => a
 const countCompleted = computed(() => scheduleAppointments.value.filter((a) => a.status === 'completed').length)
 const countCancelled = computed(() => scheduleAppointments.value.filter((a) => a.status === 'cancelled' || a.status === 'no_show').length)
 
-function setScheduleView(upcoming: boolean) {
-  showUpcoming.value = upcoming
+function setScheduleView(view: ScheduleView) {
+  if (scheduleView.value === view) return
+  scheduleView.value = view
   statusFilter.value = 'all'
 }
 
 function setToday() {
-  selectedDate.value = new Date().toISOString().split('T')[0] || ''
+  selectedDate.value = clinicDateFormat.format()
 }
 
 function setTomorrow() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  selectedDate.value = d.toISOString().split('T')[0] || ''
+  selectedDate.value = shiftDate(clinicDateFormat.format(), 1)
 }
 
-function handlePrevDay() {
-  if (!selectedDate.value) return
-  const parts = selectedDate.value.split('-')
-  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
-  d.setDate(d.getDate() - 1)
-  selectedDate.value = d.toISOString().split('T')[0] || ''
+function shiftDate(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
-function handleNextDay() {
-  if (!selectedDate.value) return
-  const parts = selectedDate.value.split('-')
-  const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
-  d.setDate(d.getDate() + 1)
-  selectedDate.value = d.toISOString().split('T')[0] || ''
+function moveSelectedDate(days: number) {
+  selectedDate.value = shiftDate(selectedDate.value || clinicDateFormat.format(), days)
+}
+
+function getAppointmentDate(timestamp: string) {
+  return timestampOffset.test(timestamp) ? clinicDateFormat.format(new Date(timestamp)) : timestamp.slice(0, 10)
 }
 
 function formatDisplayDate(dateStr: string): string {
@@ -190,13 +207,13 @@ function formatDisplayDate(dateStr: string): string {
   })
 }
 
-function formatTime(isoStr: string): string {
-  try {
-    const d = new Date(isoStr)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return ''
-  }
+function formatTime(timestamp: string): string {
+  const withOffset = timestampOffset.test(timestamp)
+  return new Date(withOffset ? timestamp : `${timestamp}Z`).toLocaleTimeString('en-PH', {
+    timeZone: withOffset ? clinicTimeZone : 'UTC',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function getStatusBadgeClass(status: AppointmentStatus) {
@@ -358,6 +375,7 @@ async function submitAdminBooking() {
         </button>
 
         <button
+          v-if="canScheduleWalkIn"
           type="button"
           @click="openAdminBooking"
           class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl app-primary-action font-semibold text-xs transition shadow-md shadow-teal-600/20 cursor-pointer"
@@ -365,10 +383,18 @@ async function submitAdminBooking() {
           <Plus class="w-4 h-4" />
           Schedule Walk-In Visit
         </button>
+        <RouterLink
+          v-if="authStore.isDoctor"
+          :to="{ name: 'clinic-availability' }"
+          class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl app-primary-action font-semibold text-xs shadow-md shadow-teal-600/20"
+        >
+          <Calendar class="size-4" />
+          My Availability
+        </RouterLink>
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-3" :class="showUpcoming ? 'sm:grid-cols-3' : 'sm:grid-cols-5'">
+    <div v-if="!showCompleted" class="grid grid-cols-2 gap-3" :class="showUpcoming ? 'sm:grid-cols-3' : 'sm:grid-cols-5'">
       <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Visits</span>
         <div class="flex items-baseline justify-between mt-1">
@@ -413,22 +439,15 @@ async function submitAdminBooking() {
     <div class="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs space-y-4">
       <div v-if="authStore.isSecretary" class="flex flex-wrap items-center gap-2">
         <button
+          v-for="view in scheduleViews"
+          :key="view.value"
           type="button"
-          :aria-pressed="showUpcoming"
+          :aria-pressed="scheduleView === view.value"
           class="px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer"
-          :class="showUpcoming ? 'bg-teal-50 border-teal-200 text-teal-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
-          @click="setScheduleView(true)"
+          :class="scheduleView === view.value ? 'bg-teal-50 border-teal-200 text-teal-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
+          @click="setScheduleView(view.value)"
         >
-          Upcoming
-        </button>
-        <button
-          type="button"
-          :aria-pressed="!showUpcoming"
-          class="px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer"
-          :class="!showUpcoming ? 'bg-teal-50 border-teal-200 text-teal-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
-          @click="setScheduleView(false)"
-        >
-          By date
+          {{ view.label }}
         </button>
       </div>
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -441,6 +460,7 @@ async function submitAdminBooking() {
             Today
           </button>
           <button
+            v-if="!showCompleted"
             type="button"
             @click="setTomorrow"
             class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-bold text-slate-800 transition cursor-pointer"
@@ -451,7 +471,7 @@ async function submitAdminBooking() {
           <div class="flex items-center gap-1 border border-slate-200 rounded-xl px-2 py-1 bg-slate-50/80">
             <button
               type="button"
-              @click="handlePrevDay"
+              @click="moveSelectedDate(-1)"
               class="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
               aria-label="Previous day"
             >
@@ -460,11 +480,13 @@ async function submitAdminBooking() {
             <input
               v-model="selectedDate"
               type="date"
+              aria-label="Appointment date"
+              @change="selectedDate || setToday()"
               class="text-xs font-bold text-slate-800 bg-transparent border-none focus:outline-none cursor-pointer"
             />
             <button
               type="button"
-              @click="handleNextDay"
+              @click="moveSelectedDate(1)"
               class="p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
               aria-label="Next day"
             >
@@ -482,6 +504,7 @@ async function submitAdminBooking() {
             <Stethoscope class="w-4 h-4 text-slate-400" />
             <select
               v-model="selectedDoctorId"
+              aria-label="Filter by doctor"
               class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500 transition cursor-pointer"
             >
               <option value="all">All Orthodontists & Doctors</option>
@@ -507,7 +530,7 @@ async function submitAdminBooking() {
         </div>
       </div>
 
-      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 border-t border-slate-100">
+      <div v-if="!showCompleted" class="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 border-t border-slate-100">
         <button
           type="button"
           @click="statusFilter = 'all'"
@@ -577,6 +600,13 @@ async function submitAdminBooking() {
       </div>
     </div>
 
+    <div v-if="showCompleted" class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-lg font-bold text-slate-900">Completed Visits</h2>
+      <span v-if="!appointmentStore.isLoading && !appointmentStore.error" class="text-sm text-slate-600" aria-live="polite">
+        {{ filteredAppointments.length }} {{ filteredAppointments.length === 1 ? 'visit' : 'visits' }}
+      </span>
+    </div>
+
     <p v-if="appointmentStore.error" role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
       {{ appointmentStore.error }}
     </p>
@@ -589,13 +619,15 @@ async function submitAdminBooking() {
       <div class="w-14 h-14 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
         <CalendarCheck class="w-7 h-7" />
       </div>
-      <h3 class="text-base font-bold text-slate-900">No Appointments Scheduled</h3>
+      <h3 class="text-base font-bold text-slate-900">{{ showCompleted ? 'No Completed Visits' : 'No Appointments Scheduled' }}</h3>
       <p class="text-xs text-slate-500">
-        {{ searchQuery || statusFilter !== 'all'
+        {{ showCompleted
+          ? 'No completed visits match the selected date and filters.'
+          : searchQuery || statusFilter !== 'all'
           ? 'No appointments match your filters.'
           : (showUpcoming ? 'There are no upcoming visits or pending requests.' : `No consultations found for ${formatDisplayDate(selectedDate)}.`) }}
       </p>
-      <div class="pt-2">
+      <div v-if="!showCompleted && canScheduleWalkIn" class="pt-2">
         <button
           type="button"
           @click="openAdminBooking"
@@ -649,7 +681,7 @@ async function submitAdminBooking() {
             <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-0.5">
               <span v-if="showUpcoming" class="flex items-center gap-1">
                 <Calendar class="w-3.5 h-3.5 text-slate-400" />
-                {{ new Date(appt.start_time).toLocaleDateString('en-PH', { dateStyle: 'medium' }) }}
+                {{ formatDisplayDate(getAppointmentDate(appt.start_time)) }}
               </span>
               <span class="flex items-center gap-1">
                 <Stethoscope class="w-3.5 h-3.5 text-slate-400" />
