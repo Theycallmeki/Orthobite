@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from config.settings import settings
 from models.audit import AuditAction
-from models.record import Payment, PaymentCapture, PaymentMethod, TreatmentRecord
+from models.record import Payment, PaymentCapture, PaymentMethod, TreatmentPaymentTerms, TreatmentRecord
 from models.users import User, UserRole
 from schemas.record import (
     PatientLedgerSummary,
@@ -77,6 +77,7 @@ def compute_treatment_record_response(
         treatment_name=record.treatment_name,
         tooth_number=record.tooth_number,
         value_of_work=val_of_work,
+        down_payment_amount=record.payment_terms.down_payment_amount if record.payment_terms else None,
         total_paid=paid,
         balance=bal,
         signature_url=record.signature_url,
@@ -209,6 +210,11 @@ def _require_payment_for_consent(data: TreatmentRecordCreate | TreatmentRecordUp
         )
 
 
+def _validate_down_payment(amount: Optional[Decimal], charge: Decimal) -> None:
+    if amount is not None and amount > charge:
+        raise HTTPException(status_code=422, detail="The down payment cannot exceed the treatment charge.")
+
+
 def create_treatment_record(
     db: Session,
     data: TreatmentRecordCreate,
@@ -218,6 +224,8 @@ def create_treatment_record(
     """Creates a new digital treatment entry in the patient ledger."""
 
     _require_payment_for_consent(data)
+    charge = _quantize_money(data.value_of_work)
+    _validate_down_payment(data.down_payment_amount, charge)
     get_patient_user_or_404(db, data.patient_id)
 
 
@@ -237,9 +245,11 @@ def create_treatment_record(
         date=record_date,
         treatment_name=data.treatment_name.strip(),
         tooth_number=data.tooth_number.strip() if data.tooth_number else None,
-        value_of_work=_quantize_money(data.value_of_work),
+        value_of_work=charge,
         notes=data.notes,
     )
+    if data.down_payment_amount:
+        record.payment_terms = TreatmentPaymentTerms(down_payment_amount=data.down_payment_amount)
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -257,8 +267,9 @@ def create_treatment_record(
     return compute_treatment_record_response(record)
 
 
-def get_treatment_record_or_404(db: Session, record_id: int) -> TreatmentRecord:
-    record = db.query(TreatmentRecord).filter(TreatmentRecord.id == record_id).first()
+def get_treatment_record_or_404(db: Session, record_id: int, *, lock: bool = False) -> TreatmentRecord:
+    query = db.query(TreatmentRecord).filter(TreatmentRecord.id == record_id)
+    record = (query.with_for_update() if lock else query).first()
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -276,7 +287,20 @@ def update_treatment_record(
 ) -> TreatmentRecordResponse:
     """Updates an existing treatment record entry."""
     _require_payment_for_consent(data)
-    record = get_treatment_record_or_404(db, record_id)
+    record = get_treatment_record_or_404(db, record_id, lock=True)
+    changes_terms = "down_payment_amount" in data.model_fields_set
+    down_payment = record.payment_terms.down_payment_amount if record.payment_terms else None
+    if changes_terms:
+        down_payment = data.down_payment_amount
+    charge = _quantize_money(data.value_of_work) if data.value_of_work is not None else record.value_of_work
+    _validate_down_payment(down_payment, charge)
+    if changes_terms:
+        if not down_payment:
+            record.payment_terms = None
+        elif record.payment_terms:
+            record.payment_terms.down_payment_amount = down_payment
+        else:
+            record.payment_terms = TreatmentPaymentTerms(down_payment_amount=down_payment)
 
     if data.treatment_name is not None:
         record.treatment_name = data.treatment_name.strip()

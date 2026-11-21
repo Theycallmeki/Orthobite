@@ -1,10 +1,13 @@
 from datetime import date as py_date, datetime as py_datetime
 from decimal import Decimal
-from typing import List, Optional, Dict, Any
+from typing import Annotated, List, Optional, Dict, Any
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from models.record import PaymentMethod
+
+
+DownPaymentAmount = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2)]
 
 
 class PaymentCreate(BaseModel):
@@ -53,6 +56,7 @@ class TreatmentRecordCreate(BaseModel):
     value_of_work: Decimal = Field(
         ..., ge=0, description="Agreed total monetary value / fee for this procedure"
     )
+    down_payment_amount: Optional[DownPaymentAmount] = None
     signature_url: Optional[str] = Field(
         None, max_length=500, description="URL or relative path to captured patient signature PNG"
     )
@@ -66,6 +70,7 @@ class TreatmentRecordUpdate(BaseModel):
     treatment_name: Optional[str] = Field(None, min_length=1, max_length=255)
     tooth_number: Optional[str] = Field(None, max_length=100)
     value_of_work: Optional[Decimal] = Field(None, ge=0)
+    down_payment_amount: Optional[DownPaymentAmount] = None
     doctor_id: Optional[int] = None
     date: Optional[py_date] = None
     signature_url: Optional[str] = Field(None, max_length=500)
@@ -85,6 +90,7 @@ class TreatmentRecordResponse(BaseModel):
     treatment_name: str
     tooth_number: Optional[str] = None
     value_of_work: Decimal
+    down_payment_amount: Optional[Decimal] = None
     total_paid: Decimal = Decimal("0.00")
     balance: Decimal = Decimal("0.00")
     signature_url: Optional[str] = None

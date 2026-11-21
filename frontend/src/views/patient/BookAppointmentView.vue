@@ -44,6 +44,7 @@ const consultationFeeFormat = new Intl.NumberFormat('en-PH', { style: 'currency'
 
 const commonReasons = [
   'Orthodontic Consultation',
+  'New Braces Consultation',
   'Braces Adjustment',
   'Clear Aligners Check',
   'Retainer Fitting',
@@ -246,12 +247,12 @@ function handleBookAnother() {
       </div>
 
       <div class="space-y-2">
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-          Booking Confirmed
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+          Pending approval
         </span>
         <h2 class="text-2xl font-bold text-slate-900">Appointment Request Submitted</h2>
         <p class="text-slate-600 text-sm max-w-md mx-auto">
-          Your appointment request with <strong class="text-slate-900">{{ bookingSuccessData.doctor?.full_name || doctorStore.selectedDoctor?.full_name }}</strong> has been registered. An email notification has been dispatched.
+          The clinic secretary will review your request to see <strong class="text-slate-900">{{ bookingSuccessData.doctor?.full_name || doctorStore.selectedDoctor?.full_name }}</strong>. Check My Visits for its status.
         </p>
       </div>
 
@@ -265,7 +266,7 @@ function handleBookAnother() {
           <span class="font-semibold text-teal-800">{{ bookingSuccessData.doctor?.full_name || doctorStore.selectedDoctor?.full_name }}</span>
         </div>
         <div class="flex justify-between items-center pb-2 border-b border-slate-200">
-          <span class="text-slate-500 font-medium">Scheduled Time</span>
+          <span class="text-slate-500 font-medium">Requested Time</span>
           <span class="font-semibold text-slate-900">{{ bookingSuccessData.formatted_date || formattedSelectedDateDisplay }} &bull; {{ bookingSuccessData.formatted_time || selectedSlot?.formatted_time }}</span>
         </div>
         <div class="flex justify-between items-center">
@@ -543,7 +544,7 @@ function handleBookAnother() {
           >
             <Loader2 v-if="isSubmitting" class="w-4 h-4 animate-spin" />
             <CalendarCheck v-else class="w-4 h-4" />
-            <span>{{ isSubmitting ? 'Confirming Appointment...' : 'Book Appointment' }}</span>
+            <span>{{ isSubmitting ? 'Sending Request...' : 'Request Appointment' }}</span>
           </button>
         </div>
       </div>

@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRecordStore } from '@/stores/record'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAuthStore } from '@/stores/auth'
-import { patientsApi, type PatientResponse } from '@/api/patient'
-import { recordsApi, type PaymentResponse, type TreatmentRecordResponse } from '@/api/record'
+import { useClinicPatientSelection } from '@/composables/useClinicPatientSelection'
 import ToothMatrix from '@/components/ToothMatrix.vue'
-import RecordPaymentDialog from '@/components/RecordPaymentDialog.vue'
 import {
   FileText,
   User,
@@ -19,11 +17,7 @@ import {
   RefreshCw,
   Search,
   Layers,
-  CreditCard,
-  ShieldCheck,
   RotateCcw,
-  Eye,
-  X,
   Loader2,
   BookOpen,
 } from 'lucide-vue-next'
@@ -32,30 +26,25 @@ const recordStore = useRecordStore()
 const doctorStore = useDoctorStore()
 const authStore = useAuthStore()
 
-const patientsList = ref<PatientResponse[]>([])
-const selectedPatient = ref<PatientResponse | null>(null)
-const patientSearchQuery = ref<string>('')
-const isLoadingPatients = ref<boolean>(false)
+const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients } = useClinicPatientSelection()
+const patientSearchQuery = ref('')
 
 const selectedTeethIds = ref<number[]>([])
 const treatmentName = ref<string>('Archwire Replacement (NiTi)')
 const toothNumberCustom = ref<string>('')
 const valueOfWork = ref<number | ''>(150)
+const downPayment = ref<number | ''>('')
 const treatmentDate = ref<string>(new Date().toISOString().split('T')[0] || '')
 const attendingDoctorId = ref<number | ''>('')
 const clinicalNotes = ref<string>('')
 
-const paymentTarget = ref<TreatmentRecordResponse | null>(null)
-const paymentStatus = ref('')
-const paymentError = ref('')
-const isLoadingConsent = ref(false)
-
 const isSubmitting = ref<boolean>(false)
 const submitSuccessMessage = ref<string | null>(null)
 const submitErrorMessage = ref<string | null>(null)
-const previewSignatureModalUrl = ref<string | null>(null)
 
 const procedurePresets = [
+  'Braces Placement',
+  'Braces Adjustment',
   'Archwire Replacement (NiTi)',
   'Bracket Rebonding / Replacement',
   'Molar Band Cementation',
@@ -75,7 +64,6 @@ onMounted(async () => {
     ? (authStore.user?.id ?? '')
     : (doctorStore.activeDoctors[0]?.user_id ?? '')
 
-  await loadPatients()
 })
 
 watch(selectedTeethIds, (newIds) => {
@@ -84,100 +72,29 @@ watch(selectedTeethIds, (newIds) => {
   }
 })
 
-watch(selectedPatient, async (patient) => {
-  paymentStatus.value = ''
-  paymentError.value = ''
+watch(selectedPatient, (patient) => {
   if (patient?.user_id) {
-    await recordStore.fetchPatientLedger(patient.user_id).catch(() => {})
+    recordStore.fetchPatientLedger(patient.user_id).catch(() => {})
   }
 })
 
-async function loadPatients() {
-  isLoadingPatients.value = true
-  try {
-    const res = await patientsApi.listPatients()
-    patientsList.value = res.data
-    if (patientsList.value.length > 0 && !selectedPatient.value) {
-      selectedPatient.value = patientsList.value[0] || null
-    }
-  } catch {
-  } finally {
-    isLoadingPatients.value = false
-  }
-}
-
-const filteredPatients = computed<PatientResponse[]>(() => {
-  if (!patientSearchQuery.value.trim()) {
-    return patientsList.value
-  }
-  const q = patientSearchQuery.value.toLowerCase().trim()
-  return patientsList.value.filter((p) => {
-    const name = p.user?.full_name?.toLowerCase() || ''
-    const email = p.user?.email?.toLowerCase() || ''
-    const idStr = String(p.id)
-    return name.includes(q) || email.includes(q) || idStr.includes(q)
-  })
+const filteredPatients = computed(() => {
+  const query = patientSearchQuery.value.trim().toLowerCase()
+  return patients.value.filter((patient) =>
+    (patient.user?.full_name ?? '').toLowerCase().includes(query)
+    || (patient.user?.email ?? '').toLowerCase().includes(query)
+    || String(patient.id).includes(query),
+  )
 })
 
 const selectedLedger = computed(() => {
   const ledger = recordStore.currentPatientLedger
   return ledger && ledger.patient_id === selectedPatient.value?.user_id ? ledger : null
 })
-const patientTreatments = computed(() => selectedLedger.value?.treatments ?? [])
-const savedPaymentSignature = computed(() =>
-  selectedLedger.value?.all_payments.find((payment) => payment.has_consent),
-)
-
-function openPayment(record: TreatmentRecordResponse) {
-  paymentTarget.value = record
-  paymentStatus.value = ''
-  paymentError.value = ''
-}
-
-function finishPayment(payment: PaymentResponse) {
-  paymentTarget.value = null
-  paymentStatus.value = payment.has_consent ? 'Payment and signature saved.' : 'Payment saved.'
-}
-
-async function viewPaymentConsent(paymentId: number) {
-  if (isLoadingConsent.value) return
-  isLoadingConsent.value = true
-  paymentError.value = ''
-  try {
-    const { data } = await recordsApi.getPaymentConsent(paymentId)
-    closeSignaturePreview()
-    previewSignatureModalUrl.value = URL.createObjectURL(data)
-  } catch {
-    paymentError.value = 'Could not load the payment signature.'
-  } finally {
-    isLoadingConsent.value = false
-  }
-}
-
-function closeSignaturePreview() {
-  const url = previewSignatureModalUrl.value
-  if (url?.startsWith('blob:')) URL.revokeObjectURL(url)
-  previewSignatureModalUrl.value = null
-}
-
-onBeforeUnmount(closeSignaturePreview)
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0
   return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num)
-}
-
-function formatDate(isoStr: string): string {
-  try {
-    const d = new Date(isoStr)
-    return d.toLocaleDateString('default', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    })
-  } catch {
-    return isoStr
-  }
 }
 
 function handlePresetClick(preset: string) {
@@ -189,6 +106,7 @@ function resetForm() {
   selectedTeethIds.value = []
   toothNumberCustom.value = ''
   valueOfWork.value = 150
+  downPayment.value = ''
   treatmentDate.value = new Date().toISOString().split('T')[0] || ''
   clinicalNotes.value = ''
 }
@@ -200,6 +118,11 @@ async function handleSaveTreatmentRecord() {
   isSubmitting.value = true
   submitSuccessMessage.value = null
   submitErrorMessage.value = null
+  if (downPayment.value !== '' && (downPayment.value < 0 || downPayment.value > valueOfWork.value)) {
+    submitErrorMessage.value = 'Enter a down payment between zero and the treatment charge.'
+    isSubmitting.value = false
+    return
+  }
 
   try {
     const newRecord = await recordStore.createTreatmentRecord({
@@ -208,6 +131,7 @@ async function handleSaveTreatmentRecord() {
       treatment_name: treatmentName.value.trim(),
       tooth_number: toothNumberCustom.value.trim() || undefined,
       value_of_work: Number(valueOfWork.value),
+      down_payment_amount: downPayment.value === '' ? undefined : downPayment.value,
       date: treatmentDate.value || undefined,
       notes: clinicalNotes.value.trim() || undefined,
     })
@@ -232,11 +156,18 @@ async function handleSaveTreatmentRecord() {
           Clinical Treatment Record Editor
         </h1>
         <p class="text-sm text-slate-500 mt-1">
-          Chart treatment and review the patient's balance and payment history.
+          Chart treatment and review the patient's balance.
         </p>
       </div>
 
-      <div class="flex items-center gap-2.5">
+      <div class="flex flex-wrap items-center gap-2.5">
+        <RouterLink
+          :to="{ name: 'clinic-treatment-history', query: selectedPatient ? { patient: String(selectedPatient.id) } : {} }"
+          class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-50"
+        >
+          <BookOpen class="size-4" aria-hidden="true" />
+          Treatment History
+        </RouterLink>
         <button
           type="button"
           @click="resetForm"
@@ -276,11 +207,16 @@ async function handleSaveTreatmentRecord() {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-40 overflow-y-auto p-1">
+      <p v-if="loadingPatients" role="status" class="text-sm text-slate-600">Loading patients...</p>
+      <div v-else-if="patientLoadError" class="flex items-center gap-3 text-sm text-rose-700">
+        <p role="alert">Could not load patients.</p>
+        <button type="button" class="underline" @click="loadPatients">Retry</button>
+      </div>
+      <div v-else class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-40 overflow-y-auto p-1">
         <div
           v-for="pat in filteredPatients"
           :key="pat.id"
-          @click="selectedPatient = pat"
+          @click="selectPatient(pat.id)"
           :class="[
             'p-3 rounded-2xl border transition cursor-pointer flex items-center gap-3',
             selectedPatient?.id === pat.id
@@ -412,6 +348,20 @@ async function handleSaveTreatmentRecord() {
           </div>
         </div>
 
+        <div class="space-y-1">
+          <label for="treatment-down-payment" class="block text-xs font-bold text-slate-700">Required down payment (₱) · Optional</label>
+          <input
+            id="treatment-down-payment"
+            v-model="downPayment"
+            type="number"
+            min="0"
+            :max="valueOfWork === '' ? undefined : valueOfWork"
+            step="0.01"
+            placeholder="Only for treatments that require a down payment"
+            class="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+        </div>
+
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="space-y-1">
             <label class="block text-xs font-bold text-slate-700">Date of Procedure *</label>
@@ -476,161 +426,5 @@ async function handleSaveTreatmentRecord() {
       </div>
     </div>
 
-    <div v-if="selectedPatient" class="app-panel p-6 space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-        <div class="flex items-center gap-2">
-          <BookOpen class="w-5 h-5 text-teal-600" />
-          <div>
-            <h2 class="text-sm font-extrabold text-slate-900">Treatment History for {{ selectedPatient.user?.full_name }}</h2>
-            <p class="text-xs text-slate-500">Chronological clinical procedures and zero-drift payment installment history</p>
-          </div>
-        </div>
-
-        <span class="text-xs font-bold text-slate-500">
-          {{ patientTreatments.length }} Record(s)
-        </span>
-      </div>
-
-      <p v-if="paymentStatus" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ paymentStatus }}</p>
-      <p v-if="paymentError" role="alert" class="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{{ paymentError }}</p>
-      <div v-if="patientTreatments.length === 0" class="py-12 text-center text-xs text-slate-400 space-y-2">
-        <BookOpen class="w-6 h-6 mx-auto text-slate-300" />
-        <p>No prior treatment records logged for this patient.</p>
-      </div>
-
-      <div v-else class="space-y-3">
-        <div
-          v-for="rec in patientTreatments"
-          :key="rec.id"
-          class="p-4 rounded-2xl border border-slate-100 bg-slate-50/70 hover:bg-slate-50 transition space-y-2.5 text-xs"
-        >
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div class="flex items-center gap-2.5">
-              <span class="font-bold text-slate-900 text-sm">{{ rec.treatment_name }}</span>
-              <span v-if="rec.tooth_number" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
-                Tooth #{{ rec.tooth_number }}
-              </span>
-              <span
-                :class="[
-                  'px-2 py-0.5 rounded-full text-[10px] font-bold',
-                  Number(rec.balance) <= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                ]"
-              >
-                {{ Number(rec.balance) <= 0 ? 'Settled' : `Bal: ${formatCurrency(rec.balance)}` }}
-              </span>
-            </div>
-
-            <div class="text-[11px] text-slate-500 flex items-center gap-2">
-              <span>{{ formatDate(rec.date) }}</span>
-              <span v-if="rec.doctor_name">&bull; Dr. {{ rec.doctor_name }}</span>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-slate-200/80">
-            <div>
-              <span class="text-slate-400 text-[10px] block">Fee</span>
-              <span class="font-bold text-slate-900">{{ formatCurrency(rec.value_of_work) }}</span>
-            </div>
-            <div>
-              <span class="text-slate-400 text-[10px] block">Paid</span>
-              <span class="font-bold text-emerald-700">{{ formatCurrency(rec.total_paid) }}</span>
-            </div>
-            <div>
-              <span class="text-slate-400 text-[10px] block">Remaining</span>
-              <span class="font-bold text-slate-800">{{ formatCurrency(rec.balance) }}</span>
-            </div>
-          </div>
-
-          <div v-if="rec.notes" class="text-slate-600 bg-white p-2 rounded-lg border border-slate-200/60">
-            <span class="font-semibold text-slate-700">Notes:</span> {{ rec.notes }}
-          </div>
-
-          <div v-if="authStore.isSecretary || rec.payments.some((payment) => payment.has_consent)" class="flex flex-wrap items-center gap-2">
-            <button
-              v-if="authStore.isSecretary && Number(rec.balance) > 0"
-              type="button"
-              class="app-primary-action inline-flex items-center gap-2 rounded-lg px-3 py-2 font-semibold"
-              @click="openPayment(rec)"
-            >
-              <CreditCard class="size-4" aria-hidden="true" />
-              Record Payment
-            </button>
-            <button
-              v-for="payment in rec.payments.filter((entry) => entry.has_consent)"
-              :key="payment.id"
-              type="button"
-              class="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-teal-800 hover:bg-teal-50"
-              :disabled="isLoadingConsent"
-              @click="viewPaymentConsent(payment.id)"
-            >
-              View signature · {{ payment.receipt_no || '#' + payment.id }}
-            </button>
-          </div>
-
-          <div v-if="rec.signature_url" class="flex items-center justify-between pt-1 text-[11px] text-slate-500">
-            <span class="flex items-center gap-1 text-emerald-700 font-medium">
-              <ShieldCheck class="w-3.5 h-3.5" />
-              Patient consent signature authenticated
-            </span>
-
-            <button
-              type="button"
-              @click="previewSignatureModalUrl = rec.signature_url"
-              class="text-teal-600 font-semibold hover:underline cursor-pointer flex items-center gap-1"
-            >
-              <Eye class="w-3.5 h-3.5" />
-              View Signature
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <RecordPaymentDialog
-      v-if="paymentTarget"
-      :record="paymentTarget"
-      :saved-signature="savedPaymentSignature"
-      @close="paymentTarget = null"
-      @saved="finishPayment"
-    />
-
-    <div
-      v-if="previewSignatureModalUrl"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
-    >
-      <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div class="flex items-center gap-2 text-teal-700 font-bold">
-            <ShieldCheck class="w-5 h-5" />
-            <h3 class="text-base text-slate-900">Patient Consent Signature</h3>
-          </div>
-          <button
-            type="button"
-            @click="closeSignaturePreview"
-            class="text-slate-400 hover:text-slate-600 p-1"
-          >
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-
-        <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-center">
-          <img
-            :src="previewSignatureModalUrl"
-            alt="Patient Signature"
-            class="max-h-48 object-contain"
-          />
-        </div>
-
-        <div class="pt-2 text-center">
-          <button
-            type="button"
-            @click="closeSignaturePreview"
-            class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>

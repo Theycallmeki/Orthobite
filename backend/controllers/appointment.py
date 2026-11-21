@@ -28,9 +28,12 @@ from schemas.appointment import (
 MIN_CANCELLATION_NOTICE_HOURS = 2
 
 
-def get_appointment_or_404(db: Session, appointment_id: int) -> Appointment:
+def get_appointment_or_404(db: Session, appointment_id: int, *, for_update: bool = False) -> Appointment:
     """Fetch appointment by ID or raise 404."""
-    appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    query = db.query(Appointment).filter(Appointment.id == appointment_id)
+    if for_update:
+        query = query.with_for_update()
+    appt = query.first()
     if not appt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -276,12 +279,6 @@ def book_appointment(
     db.refresh(appointment)
 
 
-    try:
-        from services.scheduler import dispatch_booking_confirmation
-        dispatch_booking_confirmation(db, appointment.id)
-    except Exception as e:
-        logger.warning(f"Could not dispatch booking confirmation for appointment {appointment.id}: {e}")
-
     return to_appointment_response(appointment)
 
 
@@ -355,9 +352,16 @@ def list_secretary_appointments(
     status_filter: Optional[AppointmentStatus] = None,
     skip: int = 0,
     limit: int = 100,
+    upcoming_only: bool = False,
 ) -> AppointmentListResponse:
     """Clinic-wide schedule view with filtering for secretary and admin staff."""
     query = db.query(Appointment)
+
+    if upcoming_only:
+        query = query.filter(
+            Appointment.start_time >= datetime.now(timezone.utc),
+            Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]),
+        )
 
     if target_date:
         start_of_day = datetime.combine(target_date, time.min)
@@ -391,10 +395,24 @@ def update_appointment_status(
     """
     Update appointment status with strict role and cancellation notice validation:
     - Patients may ONLY cancel their own appointments, subject to the minimum notice window.
-    - Doctors may confirm, complete, cancel, or mark no-show for their assigned appointments.
-    - Secretaries and Admins have clinic-wide authority to manage statuses.
+    - Doctors may complete, cancel, or mark no-show for their assigned appointments.
+    - Only secretaries may approve pending appointment requests.
     """
-    appt = get_appointment_or_404(db, appointment_id)
+    if data.status == AppointmentStatus.CONFIRMED and current_user.role != UserRole.SECRETARY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the clinic secretary can approve appointment requests.",
+        )
+    appt = get_appointment_or_404(db, appointment_id, for_update=True)
+
+    if data.status == AppointmentStatus.CONFIRMED:
+        if appt.status == AppointmentStatus.CONFIRMED:
+            return to_appointment_response(appt)
+        if appt.status != AppointmentStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only pending appointment requests can be approved.",
+            )
 
 
     if appt.status == AppointmentStatus.COMPLETED:
@@ -450,12 +468,15 @@ def update_appointment_status(
     db.refresh(appt)
 
 
-    if data.status == AppointmentStatus.CANCELLED:
-        try:
+    try:
+        if data.status == AppointmentStatus.CONFIRMED:
+            from services.scheduler import dispatch_booking_confirmation
+            dispatch_booking_confirmation(db, appt.id)
+        elif data.status == AppointmentStatus.CANCELLED:
             from services.scheduler import dispatch_cancellation_notice
             dispatch_cancellation_notice(db, appt.id, appt.cancellation_reason)
-        except Exception as e:
-            logger.warning(f"Could not dispatch cancellation notice for appointment {appt.id}: {e}")
+    except Exception as e:
+        logger.warning(f"Could not dispatch status notification for appointment {appt.id}: {e}")
 
     return to_appointment_response(appt)
 
@@ -467,7 +488,7 @@ def reschedule_appointment(
     data: AppointmentUpdate,
 ) -> AppointmentResponse:
     """Reschedule an existing appointment to a new date and time."""
-    appt = get_appointment_or_404(db, appointment_id)
+    appt = get_appointment_or_404(db, appointment_id, for_update=True)
 
 
     is_staff = current_user.role in (UserRole.ADMIN, UserRole.SECRETARY, UserRole.DOCTOR, UserRole.ORTHODONTIST)
@@ -475,6 +496,12 @@ def reschedule_appointment(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only reschedule your own appointments.",
+        )
+
+    if current_user.role == UserRole.PATIENT and appt.status == AppointmentStatus.CONFIRMED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Contact the clinic secretary to reschedule an approved appointment.",
         )
 
     if appt.status in (AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED):

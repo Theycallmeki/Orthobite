@@ -94,7 +94,7 @@ def list_patients(
         query = query.filter(Patient.treatment_stage == stage)
     if doctor_id:
         query = query.filter(Patient.assigned_doctor_id == doctor_id)
-    patients = query.order_by(Patient.created_at.desc()).offset(skip).limit(limit).all()
+    patients = query.order_by(Patient.created_at.desc(), Patient.id.desc()).offset(skip).limit(limit).all()
     return [PatientResponse.model_validate(p) for p in patients]
 
 
