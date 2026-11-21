@@ -48,7 +48,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
         appts_24h = (
             db.query(Appointment)
             .filter(
-                Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]),
+                Appointment.status == AppointmentStatus.CONFIRMED,
                 Appointment.start_time >= win_24h_start,
                 Appointment.start_time <= win_24h_end,
             )
@@ -120,7 +120,7 @@ def scan_and_send_reminders(db: Optional[Session] = None) -> Dict[str, Any]:
         appts_2h = (
             db.query(Appointment)
             .filter(
-                Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]),
+                Appointment.status == AppointmentStatus.CONFIRMED,
                 Appointment.start_time >= win_2h_start,
                 Appointment.start_time <= win_2h_end,
             )
@@ -197,7 +197,7 @@ def dispatch_booking_confirmation(db: Session, appointment_id: int) -> Optional[
     """Sends immediate booking confirmation email and creates NotificationLog."""
     try:
         appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
-        if not appt or not appt.patient or not appt.patient.email:
+        if not appt or appt.status != AppointmentStatus.CONFIRMED or not appt.patient or not appt.patient.email:
             return None
 
         doc_name = appt.doctor.user.full_name if (appt.doctor and appt.doctor.user) else "Doctor"

@@ -65,6 +65,8 @@ export interface AppointmentQueryParams {
   doctor_id?: number
   patient_id?: number
   status?: AppointmentStatus
+  date?: string
+  upcoming_only?: boolean
   start_date?: string
   end_date?: string
   skip?: number

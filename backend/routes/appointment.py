@@ -73,6 +73,7 @@ def list_appointments_root(
     status_filter: Optional[AppointmentStatus] = Query(None, alias="status"),
     date_filter: Optional[date] = Query(None, alias="date"),
     doctor_id: Optional[int] = Query(None),
+    upcoming_only: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -83,7 +84,9 @@ def list_appointments_root(
         res = appointment_controller.list_secretary_appointments(db, target_date=date_filter, doctor_id=doc_prof.id, status_filter=status_filter)
         return res.appointments
     else:
-        res = appointment_controller.list_secretary_appointments(db, target_date=date_filter, doctor_id=doctor_id, status_filter=status_filter)
+        res = appointment_controller.list_secretary_appointments(
+            db, target_date=date_filter, doctor_id=doctor_id, status_filter=status_filter, upcoming_only=upcoming_only,
+        )
         return res.appointments
 
 
@@ -210,7 +213,7 @@ def get_appointment_details(
 @router.patch(
     "/{appointment_id}/status",
     response_model=AppointmentResponse,
-    summary="Secretary/Doctor confirm, complete, or cancel",
+    summary="Approve an appointment request or update a visit status",
 )
 def update_status(
     appointment_id: int,
@@ -220,7 +223,8 @@ def update_status(
 ):
     """
     Update appointment status:
-    - **Doctor & Secretary**: Confirm, Complete, Cancel, or Mark No-Show.
+    - **Secretary**: May confirm a pending appointment.
+    - **Clinic staff**: May complete, cancel, or mark no-show within their assigned scope.
     - **Patient**: May only cancel their own appointment (subject to 2h notice window).
     """
     return appointment_controller.update_appointment_status(

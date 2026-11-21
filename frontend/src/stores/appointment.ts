@@ -22,6 +22,7 @@ export const useAppointmentStore = defineStore('appointment', () => {
   const isLoading = ref<boolean>(false)
   const error = ref<string | null>(null)
   const bookingError = ref<string | null>(null)
+  let appointmentsRequest = 0
 
   const upcomingAppointments = computed<AppointmentResponse[]>(() => {
     const now = Date.now()
@@ -91,17 +92,18 @@ export const useAppointmentStore = defineStore('appointment', () => {
   }
 
   async function fetchAppointments(params?: AppointmentQueryParams): Promise<AppointmentResponse[]> {
+    const request = ++appointmentsRequest
     isLoading.value = true
     error.value = null
     try {
       const response = await appointmentsApi.listAppointments(params)
-      appointments.value = response.data
+      if (request === appointmentsRequest) appointments.value = response.data
       return response.data
     } catch (err: unknown) {
-      error.value = extractError(err, 'Failed to fetch appointments')
+      if (request === appointmentsRequest) error.value = extractError(err, 'Failed to fetch appointments')
       throw err
     } finally {
-      isLoading.value = false
+      if (request === appointmentsRequest) isLoading.value = false
     }
   }
 

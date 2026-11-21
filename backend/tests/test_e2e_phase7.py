@@ -204,6 +204,7 @@ class TestPhase3Appointments:
             headers={"Authorization": f"Bearer {state['patient_token']}"},
         )
         assert resp.status_code in (200, 201)
+        assert resp.json()["status"] == "pending"
         state["appointment_id"] = resp.json()["id"]
 
     def test_duplicate_booking_rejected(self, client):
@@ -225,6 +226,51 @@ class TestPhase3Appointments:
             headers={"Authorization": f"Bearer {state['patient_token']}"},
         )
         assert resp.status_code in (400, 409)
+
+    def test_upcoming_request_requires_secretary_approval(self, client):
+        admin_headers = {"Authorization": f"Bearer {state['admin_token']}"}
+        appointment_id = state["appointment_id"]
+        status_url = f"/appointments/{appointment_id}/status"
+        for role in ("patient", "doctor", "admin"):
+            resp = client.patch(
+                status_url,
+                json={"status": "confirmed"},
+                headers={"Authorization": f"Bearer {state[role + '_token']}"},
+            )
+            assert resp.status_code == 403
+
+        notifications_url = f"/notifications/logs?appointment_id={appointment_id}"
+        resp = client.get(notifications_url, headers=admin_headers)
+        assert resp.status_code == 200
+        assert resp.json()["logs"] == []
+
+        resp = client.post(
+            "/users/staff",
+            json={
+                "full_name": "Clinic Secretary",
+                "username": "testsecretary",
+                "email": "secretary@test.com",
+                "password": "Secretary123!",
+                "role": "secretary",
+            },
+            headers=admin_headers,
+        )
+        assert resp.status_code == 201
+        login = client.post("/auth/login", json={"identifier": "testsecretary", "password": "Secretary123!"})
+        assert login.status_code == 200
+        secretary_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        queue = client.get("/appointments/", params={"upcoming_only": True}, headers=secretary_headers)
+        assert queue.status_code == 200
+        assert any(a["id"] == appointment_id and a["status"] == "pending" for a in queue.json())
+
+        for _ in range(2):
+            resp = client.patch(status_url, json={"status": "confirmed"}, headers=secretary_headers)
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "confirmed"
+
+        resp = client.get(notifications_url, headers=admin_headers)
+        assert resp.status_code == 200
+        assert len(resp.json()["logs"]) == 1
 
 
 VALID_PNG_BYTES = (
@@ -296,11 +342,15 @@ class TestPhase5Records:
                 "patient_id": state["patient_id"],
                 "treatment_name": "Braces Consultation",
                 "value_of_work": "5000.00",
+                "down_payment_amount": "2000.00",
                 "date": str(date.today()),
             },
             headers={"Authorization": f"Bearer {state['admin_token']}"},
         )
         assert resp.status_code in (200, 201)
+        assert Decimal(resp.json()["down_payment_amount"]) == Decimal("2000.00")
+        assert Decimal(resp.json()["balance"]) == Decimal("5000.00")
+        assert Decimal(resp.json()["total_paid"]) == 0
         state["record_id"] = resp.json()["id"]
 
     def test_add_payment_installment(self, client):
@@ -326,6 +376,7 @@ class TestPhase5Records:
         assert float(ledger["total_value_of_work"]) == 5000.00
         assert float(ledger["total_amount_paid"]) == 1500.00
         assert float(ledger["balance_due"]) == 3500.00
+        assert Decimal(ledger["treatments"][0]["down_payment_amount"]) == Decimal("2000.00")
 
 
 class TestPhase6Chat:

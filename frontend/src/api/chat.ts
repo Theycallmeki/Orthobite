@@ -9,6 +9,7 @@ export interface ChatMessageResponse {
   sender_name?: string
   sender_role?: string
   content: string
+  has_image?: boolean
   is_read: boolean
   created_at: string
 }
@@ -45,6 +46,7 @@ export interface ConversationCreateRequest {
 export interface MessageHistoryQueryParams {
   limit?: number
   before_id?: number
+  newest?: boolean
 }
 
 export interface ChatWebSocketOptions {
@@ -52,6 +54,8 @@ export interface ChatWebSocketOptions {
   onOpen?: (event: Event) => void
   onClose?: (event: CloseEvent) => void
   onError?: (event: Event) => void
+  onConversationUpdated?: () => void
+  onConversationDeleted?: (conversationId: number) => void
   autoReconnect?: boolean
   reconnectIntervalMs?: number
 }
@@ -87,6 +91,30 @@ export const chatApi = {
     return apiClient.post(`/chat/conversations/${conversationId}/read`)
   },
 
+  sendMessage(conversationId: number, content: string): Promise<AxiosResponse<ChatMessageResponse>> {
+    return apiClient.post(`/chat/conversations/${conversationId}/messages`, { content })
+  },
+
+  sendImage(conversationId: number, image: File, caption: string): Promise<AxiosResponse<ChatMessageResponse>> {
+    const form = new FormData()
+    form.append('file', image)
+    if (caption) form.append('caption', caption)
+    return apiClient.post(`/chat/conversations/${conversationId}/images`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
+  getMessageImage(conversationId: number, messageId: number, signal: AbortSignal): Promise<AxiosResponse<Blob>> {
+    return apiClient.get(`/chat/conversations/${conversationId}/messages/${messageId}/image`, {
+      responseType: 'blob',
+      signal,
+    })
+  },
+
+  deleteConversation(conversationId: number): Promise<AxiosResponse<void>> {
+    return apiClient.delete(`/chat/conversations/${conversationId}`)
+  },
+
 
   createChatSocket(options: ChatWebSocketOptions = {}): ChatWebSocketClient {
     const {
@@ -94,6 +122,8 @@ export const chatApi = {
       onOpen,
       onClose,
       onError,
+      onConversationUpdated,
+      onConversationDeleted,
       autoReconnect = true,
       reconnectIntervalMs = 3000,
     } = options
@@ -107,14 +137,16 @@ export const chatApi = {
         const url = getWebSocketUrl('/ws/chat')
         ws = new WebSocket(url)
 
-        ws.onopen = (event) => {
-          onOpen?.(event)
-        }
-
         ws.onmessage = (event) => {
           try {
             const raw = JSON.parse(event.data)
-            if (raw.type === 'new_message' && raw.message) {
+            if (raw.type === 'connection_ack') {
+              onOpen?.(event)
+            } else if (raw.type === 'conversation_updated') {
+              onConversationUpdated?.()
+            } else if (raw.type === 'conversation_deleted' && typeof raw.conversation_id === 'number') {
+              onConversationDeleted?.(raw.conversation_id)
+            } else if (raw.type === 'new_message' && raw.message) {
               onMessage?.(raw.message as ChatMessageResponse)
             } else if (raw.id && raw.conversation_id && raw.content) {
               onMessage?.(raw as ChatMessageResponse)

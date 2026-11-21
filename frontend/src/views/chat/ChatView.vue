@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, nextTick, watch } from 'vue'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import ChatImage from '@/components/ChatImage.vue'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
 import type { ConversationResponse, ChatMessageResponse } from '@/api/chat'
@@ -19,6 +22,9 @@ import {
   Loader2,
   Clock,
   AlertCircle,
+  ImagePlus,
+  Trash2,
+  X,
 } from 'lucide-vue-next'
 
 const chatStore = useChatStore()
@@ -27,28 +33,30 @@ const authStore = useAuthStore()
 const messageText = ref<string>('')
 const searchQuery = ref<string>('')
 const messageContainer = ref<HTMLDivElement | null>(null)
-const isTyping = ref<boolean>(false)
 const isSending = ref<boolean>(false)
+const imageInput = ref<HTMLInputElement | null>(null)
+const selectedImage = ref<File | null>(null)
+const imageError = ref('')
+const deleteTarget = ref<ConversationResponse | null>(null)
+const isDeleting = ref(false)
+let syncTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(async () => {
   chatStore.connectWebSocket()
-  await chatStore.fetchConversations()
+  syncTimer = setInterval(() => { void chatStore.syncChat() }, 5000)
+  await chatStore.fetchConversations().catch(() => {})
 
   if (chatStore.conversations.length > 0 && chatStore.activeConversationId === null) {
     const firstId = chatStore.conversations[0]?.id
     if (firstId) {
-      await chatStore.selectConversation(firstId)
+      await chatStore.selectConversation(firstId).catch(() => {})
     }
-  } else if (chatStore.conversations.length === 0 && !authStore.isStaff) {
-    await chatStore.createOrGetConversation()
   }
 
   scrollToBottom()
 })
 
-onBeforeUnmount(() => {
-  chatStore.disconnectWebSocket()
-})
+onBeforeUnmount(() => clearInterval(syncTimer))
 
 watch(
   () => chatStore.activeMessages.length,
@@ -62,6 +70,9 @@ watch(
 watch(
   () => chatStore.activeConversationId,
   () => {
+    messageText.value = ''
+    selectedImage.value = null
+    imageError.value = ''
     nextTick(() => {
       scrollToBottom()
     })
@@ -83,7 +94,7 @@ const filteredConversations = computed<ConversationResponse[]>(() => {
 function getInterlocutorName(conv: ConversationResponse): string {
   const currentUserId = authStore.user?.id
   if (currentUserId === conv.patient_id) {
-    return conv.secretary_name || 'OrthoBite Clinical Team'
+    return conv.secretary_name || 'Clinic Secretary'
   }
   return conv.patient_name || `Patient #${conv.patient_id}`
 }
@@ -91,7 +102,7 @@ function getInterlocutorName(conv: ConversationResponse): string {
 function getInterlocutorRole(conv: ConversationResponse): string {
   const currentUserId = authStore.user?.id
   if (currentUserId === conv.patient_id) {
-    return 'Clinic Care Staff'
+    return 'Secretary'
   }
   return 'Patient'
 }
@@ -125,22 +136,48 @@ function scrollToBottom() {
 }
 
 async function handleSelectConversation(convId: number) {
-  await chatStore.selectConversation(convId)
+  await chatStore.selectConversation(convId).catch(() => {})
 }
 
 async function handleSendMessage() {
   const text = messageText.value.trim()
-  if (!text || !chatStore.activeConversationId) return
+  const image = selectedImage.value
+  if ((!text && !image) || !chatStore.activeConversationId || isSending.value) return
 
   isSending.value = true
   try {
-    chatStore.sendMessage(text)
-    messageText.value = ''
+    const sent = await chatStore.sendMessage(text, image ?? undefined)
+    if (!sent) return
+    if (messageText.value.trim() === text) messageText.value = ''
+    if (selectedImage.value === image) selectedImage.value = null
     nextTick(() => {
       scrollToBottom()
     })
   } finally {
     isSending.value = false
+  }
+}
+
+function chooseImage(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (file.size > 5 * 1024 * 1024) {
+    imageError.value = 'Choose an image that is 5 MB or smaller.'
+    return
+  }
+  selectedImage.value = file
+  imageError.value = ''
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value || isDeleting.value) return
+  isDeleting.value = true
+  try {
+    if (await chatStore.deleteConversation(deleteTarget.value.id)) deleteTarget.value = null
+  } finally {
+    isDeleting.value = false
   }
 }
 
@@ -153,7 +190,8 @@ function handleKeyDown(e: KeyboardEvent) {
 
 async function handleStartNewChat() {
   try {
-    await chatStore.createOrGetConversation()
+    const conversation = await chatStore.createOrGetConversation()
+    await chatStore.selectConversation(conversation.id)
   } catch {
   }
 }
@@ -167,8 +205,8 @@ async function handleStartNewChat() {
           <MessageSquare class="w-5 h-5" />
         </div>
         <div>
-          <h1 class="text-xl font-bold leading-tight text-slate-900">Live Clinical Consultation Chat</h1>
-          <p class="text-xs text-slate-500">Real-time encrypted communication with the care team</p>
+          <h1 class="text-xl font-bold leading-tight text-slate-900">Clinic Chat</h1>
+          <p class="text-xs text-slate-500">Messages between patients and the clinic secretary</p>
         </div>
       </div>
 
@@ -210,6 +248,7 @@ async function handleStartNewChat() {
       </div>
     </div>
 
+    <p v-if="chatStore.error && !deleteTarget" role="alert" class="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{{ chatStore.error }}</p>
     <div class="app-panel grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-12">
       <div class="md:col-span-4 border-r border-slate-200 flex flex-col h-full bg-slate-50/50">
         <div class="p-3.5 border-b border-slate-200 space-y-2">
@@ -223,14 +262,15 @@ async function handleStartNewChat() {
             />
           </div>
 
-          <div v-if="!authStore.isStaff && chatStore.conversations.length === 0" class="pt-1">
+          <div v-if="authStore.isPatient && chatStore.conversations.length === 0" class="pt-1">
             <button
               type="button"
               @click="handleStartNewChat"
+              :disabled="chatStore.isLoading"
               class="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl app-primary-action font-semibold text-xs transition cursor-pointer shadow-xs"
             >
               <Plus class="w-4 h-4" />
-              Start Clinical Consultation
+              Message the Secretary
             </button>
           </div>
         </div>
@@ -275,7 +315,7 @@ async function handleStartNewChat() {
 
               <div class="flex items-center justify-between">
                 <p class="text-[11px] text-slate-500 truncate max-w-[180px]">
-                  {{ typeof conv.last_message === 'string' ? conv.last_message : conv.last_message?.content || 'No messages yet' }}
+                  {{ typeof conv.last_message === 'string' ? conv.last_message : conv.last_message?.content || (conv.last_message?.has_image ? 'Image' : 'No messages yet') }}
                 </p>
 
                 <span
@@ -311,10 +351,18 @@ async function handleStartNewChat() {
             </div>
 
             <div class="flex items-center gap-2">
-              <span class="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-medium bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                <Wifi class="w-3.5 h-3.5" />
-                Live WebSocket
-              </span>
+              <Button
+                v-if="authStore.isSecretary"
+                type="button"
+                label="Delete conversation"
+                severity="danger"
+                size="small"
+                text
+                @click="deleteTarget = chatStore.activeConversation"
+              >
+                <Trash2 class="size-4" aria-hidden="true" />
+                Delete conversation
+              </Button>
             </div>
           </div>
 
@@ -383,7 +431,8 @@ async function handleStartNewChat() {
                     : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-none'
                 ]"
               >
-                <p class="whitespace-pre-wrap break-words">{{ msg.content }}</p>
+                <ChatImage v-if="msg.has_image" :conversation-id="msg.conversation_id" :message-id="msg.id" />
+                <p v-if="msg.content" class="whitespace-pre-wrap break-words" :class="{ 'mt-2': msg.has_image }">{{ msg.content }}</p>
 
                 <div
                   v-if="msg.sender_id === authStore.user?.id"
@@ -397,18 +446,31 @@ async function handleStartNewChat() {
           </div>
 
           <div class="p-3 sm:p-4 border-t border-slate-200 bg-white shrink-0">
+            <p v-if="imageError" role="alert" class="mb-2 text-sm text-rose-700">{{ imageError }}</p>
+            <div v-if="selectedImage" class="mb-2 flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+              <span class="truncate">{{ selectedImage.name }}</span>
+              <button type="button" aria-label="Remove attached image" :disabled="isSending" @click="selectedImage = null">
+                <X class="size-4" aria-hidden="true" />
+              </button>
+            </div>
             <form @submit.prevent="handleSendMessage" class="flex items-center gap-2">
+              <input ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="chooseImage" />
+              <Button type="button" severity="secondary" outlined aria-label="Attach image" title="Attach image" :disabled="isSending" @click="imageInput?.click()">
+                <ImagePlus class="size-4" aria-hidden="true" />
+              </Button>
               <input
                 v-model="messageText"
                 @keydown="handleKeyDown"
                 type="text"
-                placeholder="Type your clinical consultation message..."
-                class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                maxlength="2000"
+                aria-label="Message"
+                placeholder="Write a message…"
+                class="min-w-0 flex-1 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
               />
 
               <button
                 type="submit"
-                :disabled="!messageText.trim() || isSending"
+                :disabled="(!messageText.trim() && !selectedImage) || isSending"
                 class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl app-primary-action font-semibold text-xs transition cursor-pointer shadow-sm shadow-teal-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Send class="w-4 h-4" />
@@ -427,5 +489,24 @@ async function handleStartNewChat() {
         </div>
       </div>
     </div>
+    <Dialog
+      :visible="!!deleteTarget"
+      modal
+      header="Delete conversation?"
+      class="w-[min(28rem,calc(100vw-2rem))]"
+      :closable="!isDeleting"
+      :close-on-escape="!isDeleting"
+      @update:visible="deleteTarget = null"
+    >
+      <p class="mb-4 text-sm text-slate-700">
+        This permanently removes the conversation with {{ deleteTarget?.patient_name || 'this patient' }},
+        including all messages and images, for both sides.
+      </p>
+      <p v-if="chatStore.error" role="alert" class="mb-4 text-sm text-rose-700">{{ chatStore.error }}</p>
+      <div class="flex justify-end gap-2">
+        <Button type="button" label="Cancel" severity="secondary" outlined :disabled="isDeleting" @click="deleteTarget = null" />
+        <Button type="button" label="Delete conversation" severity="danger" :loading="isDeleting" @click="confirmDelete" />
+      </div>
+    </Dialog>
   </div>
 </template>

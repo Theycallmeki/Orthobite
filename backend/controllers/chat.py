@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
+from sqlalchemy import func
 
-from models.chat import Conversation, ChatMessage
+from models.chat import ChatAttachment, Conversation, ChatMessage
 from models.users import User, UserRole
 from schemas.chat import (
     ChatMessageResponse,
@@ -15,9 +15,13 @@ from schemas.chat import (
 )
 
 
-def get_conversation_or_404(db: Session, conversation_id: int) -> Conversation:
+CHAT_ROLES = (UserRole.PATIENT, UserRole.SECRETARY)
+
+
+def get_conversation_or_404(db: Session, conversation_id: int, *, lock: bool = False) -> Conversation:
     """Fetch conversation by ID or raise 404."""
-    conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    query = db.query(Conversation).filter(Conversation.id == conversation_id)
+    conv = (query.with_for_update() if lock else query).first()
     if not conv:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -26,13 +30,50 @@ def get_conversation_or_404(db: Session, conversation_id: int) -> Conversation:
     return conv
 
 
+def get_accessible_conversation(db: Session, conversation_id: int, user: User, *, lock: bool = False) -> Conversation:
+    conversation = get_conversation_or_404(db, conversation_id, lock=lock)
+    if (
+        user.role not in CHAT_ROLES
+        or conversation.patient.role != UserRole.PATIENT
+        or (user.role == UserRole.PATIENT and conversation.patient_id != user.id)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this conversation.")
+    return conversation
+
+
+def active_secretary(conversation: Conversation) -> Optional[User]:
+    secretary = conversation.secretary
+    if secretary and secretary.role == UserRole.SECRETARY and secretary.is_active:
+        return secretary
+    return None
+
+
+def get_recipient_ids(db: Session, conversation: Conversation, sender: User) -> set[int]:
+    if sender.role == UserRole.SECRETARY:
+        return {conversation.patient_id} if conversation.patient.is_active else set()
+    secretary = active_secretary(conversation)
+    if secretary:
+        return {secretary.id}
+    return get_active_secretary_ids(db)
+
+
+def get_active_secretary_ids(db: Session) -> set[int]:
+    return {
+        user_id for (user_id,) in db.query(User.id).filter(
+            User.role == UserRole.SECRETARY, User.is_active.is_(True),
+        )
+    }
+
+
 def get_or_create_conversation(
     db: Session, patient_id: int, secretary_id: Optional[int] = None
 ) -> Conversation:
     """
     Finds existing conversation for a patient or initiates a new one.
     """
-    patient = db.query(User).filter(User.id == patient_id).first()
+    patient = db.query(User).filter(
+        User.id == patient_id, User.role == UserRole.PATIENT, User.is_active.is_(True),
+    ).with_for_update().first()
     if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -48,7 +89,7 @@ def get_or_create_conversation(
         db.add(conv)
         db.commit()
         db.refresh(conv)
-    elif secretary_id is not None and conv.secretary_id is None:
+    elif secretary_id is not None and active_secretary(conv) is None:
 
         conv.secretary_id = secretary_id
         db.commit()
@@ -66,6 +107,7 @@ def format_message_response(msg: ChatMessage) -> ChatMessageResponse:
         sender_name=msg.sender.full_name if msg.sender else None,
         sender_role=msg.sender.role.value if msg.sender and hasattr(msg.sender.role, "value") else None,
         content=msg.content,
+        has_image=msg.attachment is not None,
         is_read=msg.is_read,
         created_at=msg.created_at,
     )
@@ -96,12 +138,13 @@ def format_conversation_response(
         .first()
     )
 
+    secretary = active_secretary(conv)
     return ConversationResponse(
         id=conv.id,
         patient_id=conv.patient_id,
         patient_name=conv.patient.full_name if conv.patient else None,
-        secretary_id=conv.secretary_id,
-        secretary_name=conv.secretary.full_name if conv.secretary else None,
+        secretary_id=secretary.id if secretary else None,
+        secretary_name=secretary.full_name if secretary else None,
         unread_count=unread_count,
         last_message=format_message_response(last_msg) if last_msg else None,
         created_at=conv.created_at,
@@ -111,22 +154,16 @@ def format_conversation_response(
 
 def list_conversations(db: Session, current_user: User) -> ConversationListResponse:
     """
-    Returns inbox list for staff with unread badge counts, or the patient's own conversation.
+    Returns the secretary inbox, or the patient's own conversation.
     """
-    is_staff = current_user.role in (
-        UserRole.ADMIN,
-        UserRole.SECRETARY,
-        UserRole.DOCTOR,
-        UserRole.ORTHODONTIST,
-    )
-
-    if is_staff:
+    if current_user.role == UserRole.SECRETARY:
         conversations = (
             db.query(Conversation)
+            .filter(Conversation.patient.has(User.role == UserRole.PATIENT))
             .order_by(Conversation.updated_at.desc())
             .all()
         )
-    else:
+    elif current_user.role == UserRole.PATIENT:
 
         conversations = (
             db.query(Conversation)
@@ -134,10 +171,8 @@ def list_conversations(db: Session, current_user: User) -> ConversationListRespo
             .order_by(Conversation.updated_at.desc())
             .all()
         )
-        if not conversations:
-
-            conv = get_or_create_conversation(db, current_user.id)
-            conversations = [conv]
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Chat is available to patients and secretaries.")
 
     conv_responses = [
         format_conversation_response(db, c, current_user.id) for c in conversations
@@ -151,7 +186,7 @@ def list_conversations(db: Session, current_user: User) -> ConversationListRespo
 
 
 def get_chat_history(
-    db: Session, conversation_id: int, page: int = 1, page_size: int = 50
+    db: Session, conversation_id: int, page: int = 1, page_size: int = 50, newest: bool = False,
 ) -> ChatHistoryResponse:
     """Retrieves paginated chat history for a conversation (chronological asc order)."""
     get_conversation_or_404(db, conversation_id)
@@ -164,14 +199,19 @@ def get_chat_history(
     )
 
     offset = (page - 1) * page_size
+    order = (ChatMessage.created_at.desc(), ChatMessage.id.desc()) if newest else (
+        ChatMessage.created_at.asc(), ChatMessage.id.asc(),
+    )
     messages = (
         db.query(ChatMessage)
         .filter(ChatMessage.conversation_id == conversation_id)
-        .order_by(ChatMessage.created_at.asc())
+        .order_by(*order)
         .offset(offset)
         .limit(page_size)
         .all()
     )
+    if newest:
+        messages.reverse()
 
     has_more = (offset + len(messages)) < total_count
 
@@ -186,30 +226,27 @@ def get_chat_history(
 
 
 def create_chat_message(
-    db: Session, conversation_id: int, sender_id: int, content: str
+    db: Session, conversation: Conversation, sender: User, content: str,
+    attachment: Optional[ChatAttachment] = None,
 ) -> ChatMessageResponse:
-    """Stores a new message in the database and updates conversation timestamp."""
-    conv = get_conversation_or_404(db, conversation_id)
-
-    sender = db.query(User).filter(User.id == sender_id).first()
-    if not sender:
-        raise HTTPException(status_code=404, detail="Sender user not found.")
-
-
-    if conv.secretary_id is None and sender.role in (UserRole.ADMIN, UserRole.SECRETARY):
-        conv.secretary_id = sender.id
+    """Store a message in an authorized patient-secretary conversation."""
+    content = content.strip()
+    if len(content) > 2000 or (not content and attachment is None):
+        raise HTTPException(status_code=422, detail="Enter a message of up to 2000 characters or attach an image.")
+    if sender.role == UserRole.SECRETARY and active_secretary(conversation) is None:
+        conversation.secretary_id = sender.id
 
     msg = ChatMessage(
-        conversation_id=conversation_id,
-        sender_id=sender_id,
-        content=content.strip(),
+        conversation_id=conversation.id,
+        sender_id=sender.id,
+        content=content,
         is_read=False,
+        attachment=attachment,
     )
     db.add(msg)
-    conv.updated_at = func.now()
+    conversation.updated_at = func.now()
     db.commit()
     db.refresh(msg)
-
     return format_message_response(msg)
 
 

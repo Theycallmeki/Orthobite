@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useAppointmentStore } from '@/stores/appointment'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAuthStore } from '@/stores/auth'
-import type { AppointmentResponse, AppointmentStatus } from '@/api/appointment'
+import type { AppointmentQueryParams, AppointmentResponse, AppointmentStatus } from '@/api/appointment'
 import type { DoctorPublicResponse } from '@/api/doctor'
 import {
   Calendar,
@@ -34,6 +34,7 @@ const appointmentStore = useAppointmentStore()
 const doctorStore = useDoctorStore()
 const authStore = useAuthStore()
 
+const showUpcoming = ref(authStore.isSecretary)
 const selectedDate = ref<string>(new Date().toISOString().split('T')[0] || '')
 const selectedDoctorId = ref<number | 'all'>('all')
 const statusFilter = ref<'all' | 'pending' | 'confirmed' | 'completed' | 'cancelled'>('all')
@@ -71,13 +72,15 @@ onMounted(async () => {
   await fetchSchedule()
 })
 
-watch([selectedDate, selectedDoctorId], async () => {
+watch([showUpcoming, selectedDate, selectedDoctorId], async () => {
   await fetchSchedule()
 })
 
 async function fetchSchedule() {
-  const params: { date?: string; doctor_id?: number } = {}
-  if (selectedDate.value) {
+  const params: AppointmentQueryParams = {}
+  if (showUpcoming.value) {
+    params.upcoming_only = true
+  } else if (selectedDate.value) {
     params.date = selectedDate.value
   }
   if (selectedDoctorId.value !== 'all') {
@@ -89,17 +92,23 @@ async function fetchSchedule() {
   }
 }
 
-const filteredAppointments = computed<AppointmentResponse[]>(() => {
+const scheduleAppointments = computed(() => {
   let list = appointmentStore.appointments
 
-  if (selectedDate.value) {
+  if (showUpcoming.value) {
+    list = list.filter((a) => a.status === 'pending' || a.status === 'confirmed')
+  } else if (selectedDate.value) {
     list = list.filter((a) => a.start_time.startsWith(selectedDate.value))
   }
 
   if (selectedDoctorId.value !== 'all') {
     list = list.filter((a) => a.doctor_id === Number(selectedDoctorId.value))
   }
+  return list
+})
 
+const filteredAppointments = computed<AppointmentResponse[]>(() => {
+  let list = scheduleAppointments.value
   if (statusFilter.value === 'pending') {
     list = list.filter((a) => a.status === 'pending')
   } else if (statusFilter.value === 'confirmed') {
@@ -131,11 +140,16 @@ const filteredAppointments = computed<AppointmentResponse[]>(() => {
   })
 })
 
-const countAll = computed(() => appointmentStore.appointments.filter((a) => a.start_time.startsWith(selectedDate.value)).length)
-const countPending = computed(() => appointmentStore.appointments.filter((a) => a.start_time.startsWith(selectedDate.value) && a.status === 'pending').length)
-const countConfirmed = computed(() => appointmentStore.appointments.filter((a) => a.start_time.startsWith(selectedDate.value) && a.status === 'confirmed').length)
-const countCompleted = computed(() => appointmentStore.appointments.filter((a) => a.start_time.startsWith(selectedDate.value) && a.status === 'completed').length)
-const countCancelled = computed(() => appointmentStore.appointments.filter((a) => a.start_time.startsWith(selectedDate.value) && (a.status === 'cancelled' || a.status === 'no_show')).length)
+const countAll = computed(() => scheduleAppointments.value.length)
+const countPending = computed(() => scheduleAppointments.value.filter((a) => a.status === 'pending').length)
+const countConfirmed = computed(() => scheduleAppointments.value.filter((a) => a.status === 'confirmed').length)
+const countCompleted = computed(() => scheduleAppointments.value.filter((a) => a.status === 'completed').length)
+const countCancelled = computed(() => scheduleAppointments.value.filter((a) => a.status === 'cancelled' || a.status === 'no_show').length)
+
+function setScheduleView(upcoming: boolean) {
+  showUpcoming.value = upcoming
+  statusFilter.value = 'all'
+}
 
 function setToday() {
   selectedDate.value = new Date().toISOString().split('T')[0] || ''
@@ -326,7 +340,9 @@ async function submitAdminBooking() {
           Clinic Schedule Manager
         </h1>
         <p class="text-sm text-slate-500 mt-1">
-          Review daily schedules, update appointment workflow statuses, and register walk-in consultations.
+          {{ authStore.isSecretary
+            ? 'Review appointment requests, approve visits, and manage the clinic schedule.'
+            : 'Review daily schedules and update visit statuses.' }}
         </p>
       </div>
 
@@ -352,7 +368,7 @@ async function submitAdminBooking() {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 gap-3" :class="showUpcoming ? 'sm:grid-cols-3' : 'sm:grid-cols-5'">
       <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Visits</span>
         <div class="flex items-baseline justify-between mt-1">
@@ -377,7 +393,7 @@ async function submitAdminBooking() {
         </div>
       </div>
 
-      <div class="bg-white p-4 rounded-2xl border border-blue-200/80 shadow-xs bg-blue-50/20">
+      <div v-if="!showUpcoming" class="bg-white p-4 rounded-2xl border border-blue-200/80 shadow-xs bg-blue-50/20">
         <span class="text-[11px] font-bold uppercase tracking-wider text-blue-800">Completed</span>
         <div class="flex items-baseline justify-between mt-1">
           <span class="text-2xl font-black text-blue-700">{{ countCompleted }}</span>
@@ -385,7 +401,7 @@ async function submitAdminBooking() {
         </div>
       </div>
 
-      <div class="bg-white p-4 rounded-2xl border border-rose-200/80 shadow-xs bg-rose-50/20 col-span-2 sm:col-span-1">
+      <div v-if="!showUpcoming" class="bg-white p-4 rounded-2xl border border-rose-200/80 shadow-xs bg-rose-50/20 col-span-2 sm:col-span-1">
         <span class="text-[11px] font-bold uppercase tracking-wider text-rose-800">Cancelled / No-Show</span>
         <div class="flex items-baseline justify-between mt-1">
           <span class="text-2xl font-black text-rose-700">{{ countCancelled }}</span>
@@ -395,8 +411,28 @@ async function submitAdminBooking() {
     </div>
 
     <div class="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+      <div v-if="authStore.isSecretary" class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          :aria-pressed="showUpcoming"
+          class="px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer"
+          :class="showUpcoming ? 'bg-teal-50 border-teal-200 text-teal-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
+          @click="setScheduleView(true)"
+        >
+          Upcoming
+        </button>
+        <button
+          type="button"
+          :aria-pressed="!showUpcoming"
+          class="px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer"
+          :class="!showUpcoming ? 'bg-teal-50 border-teal-200 text-teal-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'"
+          @click="setScheduleView(false)"
+        >
+          By date
+        </button>
+      </div>
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-2">
+        <div v-if="!showUpcoming" class="flex flex-wrap items-center gap-2">
           <button
             type="button"
             @click="setToday"
@@ -512,6 +548,7 @@ async function submitAdminBooking() {
         </button>
 
         <button
+          v-if="!showUpcoming"
           type="button"
           @click="statusFilter = 'completed'"
           :class="[
@@ -525,6 +562,7 @@ async function submitAdminBooking() {
         </button>
 
         <button
+          v-if="!showUpcoming"
           type="button"
           @click="statusFilter = 'cancelled'"
           :class="[
@@ -539,9 +577,12 @@ async function submitAdminBooking() {
       </div>
     </div>
 
-    <div v-if="appointmentStore.isLoading && appointmentStore.appointments.length === 0" class="py-16 text-center space-y-3">
+    <p v-if="appointmentStore.error" role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+      {{ appointmentStore.error }}
+    </p>
+    <div v-if="appointmentStore.isLoading" class="py-16 text-center space-y-3">
       <Loader2 class="w-8 h-8 animate-spin mx-auto text-teal-600" />
-      <p class="text-xs font-medium text-slate-500">Loading daily schedule...</p>
+      <p class="text-xs font-medium text-slate-500">Loading appointments...</p>
     </div>
 
     <div v-else-if="filteredAppointments.length === 0" class="app-panel p-12 text-center max-w-md mx-auto space-y-3">
@@ -550,7 +591,9 @@ async function submitAdminBooking() {
       </div>
       <h3 class="text-base font-bold text-slate-900">No Appointments Scheduled</h3>
       <p class="text-xs text-slate-500">
-        {{ searchQuery ? 'No appointments match your search criteria.' : `No consultations found for ${formatDisplayDate(selectedDate)}.` }}
+        {{ searchQuery || statusFilter !== 'all'
+          ? 'No appointments match your filters.'
+          : (showUpcoming ? 'There are no upcoming visits or pending requests.' : `No consultations found for ${formatDisplayDate(selectedDate)}.`) }}
       </p>
       <div class="pt-2">
         <button
@@ -592,7 +635,7 @@ async function submitAdminBooking() {
                   getStatusBadgeClass(appt.status)
                 ]"
               >
-                {{ appt.status.replace('_', ' ') }}
+                {{ appt.status === 'pending' ? 'Pending approval' : appt.status.replace('_', ' ') }}
               </span>
               <span class="text-[10px] text-slate-400 font-mono">
                 Ref #{{ appt.id }}
@@ -604,6 +647,10 @@ async function submitAdminBooking() {
             </p>
 
             <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-0.5">
+              <span v-if="showUpcoming" class="flex items-center gap-1">
+                <Calendar class="w-3.5 h-3.5 text-slate-400" />
+                {{ new Date(appt.start_time).toLocaleDateString('en-PH', { dateStyle: 'medium' }) }}
+              </span>
               <span class="flex items-center gap-1">
                 <Stethoscope class="w-3.5 h-3.5 text-slate-400" />
                 {{ appt.doctor?.full_name || `Doctor #${appt.doctor_id}` }}
@@ -640,11 +687,12 @@ async function submitAdminBooking() {
 
           <template v-if="appt.status === 'pending'">
             <button
+              v-if="authStore.isSecretary"
               type="button"
               @click="handleConfirmAppointment(appt)"
               class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer shadow-xs"
             >
-              Confirm Visit
+              Approve Request
             </button>
             <button
               type="button"
@@ -910,7 +958,7 @@ async function submitAdminBooking() {
               class="px-5 py-2.5 rounded-xl app-primary-action text-xs font-bold transition cursor-pointer shadow-md shadow-teal-600/20 disabled:opacity-50 flex items-center gap-1.5"
             >
               <Loader2 v-if="isBookingAdmin" class="w-3.5 h-3.5 animate-spin" />
-              <span>Confirm Appointment</span>
+              <span>Submit Appointment Request</span>
             </button>
           </div>
         </form>

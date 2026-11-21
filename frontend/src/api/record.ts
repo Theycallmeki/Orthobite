@@ -65,6 +65,7 @@ export interface TreatmentRecordResponse {
   treatment_name: string
   tooth_number: string | null
   value_of_work: number | string
+  down_payment_amount?: number | string | null
   total_paid: number | string
   balance: number | string
   signature_url: string | null
@@ -92,6 +93,7 @@ export interface TreatmentRecordCreateRequest {
   treatment_name: string
   tooth_number?: string
   value_of_work: number | string
+  down_payment_amount?: number | string
   date?: string
   notes?: string
 }
@@ -102,6 +104,7 @@ export interface TreatmentRecordUpdate {
   treatment_name?: string
   tooth_number?: string
   value_of_work?: number | string
+  down_payment_amount?: number | string | null
   notes?: string
 }
 

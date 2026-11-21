@@ -52,10 +52,20 @@ class TreatmentRecord(Base):
         cascade="all, delete-orphan",
         order_by="Payment.payment_date.desc()",
     )
+    payment_terms = relationship(
+        "TreatmentPaymentTerms", lazy="selectin", uselist=False, cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("ix_treatment_records_patient_date", "patient_id", "date"),
     )
+
+
+class TreatmentPaymentTerms(Base):
+    __tablename__ = "treatment_payment_terms"
+
+    treatment_record_id = Column(Integer, ForeignKey("treatment_records.id", ondelete="CASCADE"), primary_key=True)
+    down_payment_amount = Column(Numeric(12, 2), nullable=False)
 
 
 class Payment(Base):
