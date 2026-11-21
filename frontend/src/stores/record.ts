@@ -157,7 +157,7 @@ export const useRecordStore = defineStore('record', () => {
       const response = await recordsApi.createTreatmentRecord(payload)
       currentRecord.value = response.data
       if (currentPatientLedger.value?.patient_id === payload.patient_id) {
-        await fetchPatientLedger(payload.patient_id)
+        await fetchPatientLedger(payload.patient_id).catch(() => {})
       }
       return response.data
     } catch (err: unknown) {
@@ -223,10 +223,10 @@ export const useRecordStore = defineStore('record', () => {
     try {
       const response = await recordsApi.createPaymentForRecord(recordId, payload)
       if (currentPatientLedger.value?.patient_id === response.data.patient_id) {
-        await fetchPatientLedger(response.data.patient_id)
+        await fetchPatientLedger(response.data.patient_id).catch(() => {})
       }
       if (currentRecord.value?.id === recordId) {
-        await getTreatmentRecord(recordId)
+        await getTreatmentRecord(recordId).catch(() => {})
       }
       return response.data
     } catch (err: unknown) {

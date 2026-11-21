@@ -29,6 +29,7 @@ const props = withDefaults(
     backgroundColor?: string
     placeholder?: string
     readOnly?: boolean
+    showConfirm?: boolean
   }>(),
   {
     width: 600,
@@ -38,6 +39,7 @@ const props = withDefaults(
     backgroundColor: '#ffffff',
     placeholder: 'Sign using mouse, stylus, or touch...',
     readOnly: false,
+    showConfirm: true,
   },
 )
 
@@ -438,7 +440,7 @@ defineExpose({
       </span>
 
       <button
-        v-if="hasSignature"
+        v-if="hasSignature && showConfirm"
         type="button"
         @click="handleSave"
         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs transition cursor-pointer shadow-sm shadow-teal-600/20"

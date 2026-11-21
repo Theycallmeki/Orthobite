@@ -13,6 +13,7 @@ import {
   BarChart3,
   ShieldCheck,
   ClipboardList,
+  Wallet,
   LogOut,
   User,
 } from 'lucide-vue-next'
@@ -56,6 +57,9 @@ const navLinks = computed(() => {
         badge: chatStore.totalUnreadCount,
       },
     )
+    if (authStore.isDoctor) {
+      links.push({ name: 'Consultation Fee', path: '/clinic/consultation-fee', icon: Wallet })
+    }
   } else if (authStore.isAdmin) {
     links.push(
       { name: 'Analytics', path: '/admin/analytics', icon: BarChart3 },

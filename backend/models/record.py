@@ -9,8 +9,9 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    LargeBinary,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import deferred, relationship
 from sqlalchemy.sql import func
 import enum
 from config.database import Base
@@ -77,7 +78,26 @@ class Payment(Base):
 
     treatment_record = relationship("TreatmentRecord", back_populates="payments")
     patient = relationship("User", foreign_keys=[patient_id], backref="patient_payments")
+    capture = relationship(
+        "PaymentCapture", back_populates="payment", uselist=False, lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+    @property
+    def has_consent(self) -> bool:
+        return self.capture is not None and self.capture.media_type is not None
 
     __table_args__ = (
         Index("ix_payments_patient_date", "patient_id", "payment_date"),
     )
+
+
+class PaymentCapture(Base):
+    __tablename__ = "payment_captures"
+
+    request_id = Column(String(36), primary_key=True)
+    payment_id = Column(Integer, ForeignKey("payments.id", ondelete="CASCADE"), nullable=False, unique=True)
+    image_data = deferred(Column(LargeBinary))
+    media_type = Column(String(30))
+    reused_from_payment_id = Column(Integer)
+    payment = relationship("Payment", back_populates="capture")

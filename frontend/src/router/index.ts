@@ -84,6 +84,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/clinic/PatientRecordEditorView.vue'),
       },
       {
+        path: 'consultation-fee',
+        name: 'clinic-consultation-fee',
+        component: () => import('@/views/clinic/ConsultationFeeView.vue'),
+        meta: { roles: ['doctor', 'orthodontist'] },
+      },
+      {
         path: 'chat',
         name: 'clinic-chat',
         component: ChatView,

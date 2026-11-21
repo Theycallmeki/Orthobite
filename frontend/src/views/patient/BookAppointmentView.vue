@@ -37,6 +37,7 @@ const notes = ref<string>('')
 const isSubmitting = ref<boolean>(false)
 const bookingSuccessData = ref<AppointmentResponse | null>(null)
 const showDoctorPicker = ref<boolean>(false)
+const consultationFeeFormat = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
 
 const commonReasons = [
   'Orthodontic Consultation',
@@ -313,7 +314,7 @@ function handleBookAnother() {
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-bold text-slate-900 truncate">{{ doc.full_name }}</p>
                 <p class="text-[11px] text-teal-700 truncate font-medium">{{ doc.specialty }}</p>
-                <p class="text-[11px] text-slate-500">${{ Number(doc.consultation_fee).toFixed(2) }} fee</p>
+                <p class="text-[11px] text-slate-500">{{ consultationFeeFormat.format(Number(doc.consultation_fee)) }} fee</p>
               </div>
             </div>
           </div>
@@ -343,7 +344,7 @@ function handleBookAnother() {
 
             <div class="text-right sm:border-l sm:border-slate-200 sm:pl-4">
               <span class="text-[11px] font-semibold text-slate-400 block uppercase tracking-wider">Fee</span>
-              <span class="text-lg font-extrabold text-teal-700">${{ Number(doctorStore.selectedDoctor.consultation_fee).toFixed(2) }}</span>
+              <span class="text-lg font-extrabold text-teal-700">{{ consultationFeeFormat.format(Number(doctorStore.selectedDoctor.consultation_fee)) }}</span>
             </div>
           </div>
 
@@ -509,7 +510,7 @@ function handleBookAnother() {
             <div class="flex justify-between text-slate-600 pt-2 border-t border-slate-200 font-semibold">
               <span>Consultation Fee</span>
               <span class="font-extrabold text-slate-900 text-sm">
-                ${{ Number(doctorStore.selectedDoctor?.consultation_fee || 0).toFixed(2) }}
+                {{ consultationFeeFormat.format(Number(doctorStore.selectedDoctor?.consultation_fee ?? 0)) }}
               </span>
             </div>
           </div>

@@ -51,6 +51,7 @@ export interface PaymentResponse {
   method: PaymentMethod
   receipt_no: string | null
   notes: string | null
+  has_consent?: boolean
   created_at: string
 }
 
@@ -93,8 +94,6 @@ export interface TreatmentRecordCreateRequest {
   value_of_work: number | string
   date?: string
   notes?: string
-  signature_url?: string
-  signature_base64?: string
 }
 
 export interface TreatmentRecordUpdate {
@@ -104,8 +103,6 @@ export interface TreatmentRecordUpdate {
   tooth_number?: string
   value_of_work?: number | string
   notes?: string
-  signature_url?: string
-  signature_base64?: string
 }
 
 export interface PaymentCreateRequest {
@@ -116,6 +113,10 @@ export interface PaymentCreateRequest {
   method: PaymentMethod
   receipt_no?: string
   notes?: string
+  payment_request_id?: string
+  consent_signature_base64?: string
+  reuse_consent_payment_id?: number
+  reuse_consent_confirmed?: boolean
 }
 
 
@@ -175,6 +176,10 @@ export const recordsApi = {
 
   createGeneralPayment(payload: PaymentCreateRequest): Promise<AxiosResponse<PaymentResponse>> {
     return apiClient.post('/records/payments', payload)
+  },
+
+  getPaymentConsent(paymentId: number): Promise<AxiosResponse<Blob>> {
+    return apiClient.get(`/records/payments/${paymentId}/consent`, { responseType: 'blob' })
   },
 
 

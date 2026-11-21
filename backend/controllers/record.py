@@ -7,11 +7,12 @@ from decimal import Decimal
 from typing import Dict, Any, List, Optional
 from fastapi import HTTPException, UploadFile, status
 from PIL import Image
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.settings import settings
 from models.audit import AuditAction
-from models.record import Payment, PaymentMethod, TreatmentRecord
+from models.record import Payment, PaymentCapture, PaymentMethod, TreatmentRecord
 from models.users import User, UserRole
 from schemas.record import (
     PatientLedgerSummary,
@@ -182,7 +183,7 @@ def _validate_image_bytes(data: bytes) -> str:
         )
 
 
-def save_signature_base64(signature_data: str) -> str:
+def _decode_signature_base64(signature_data: str) -> bytes:
     if not signature_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -201,7 +202,11 @@ def save_signature_base64(signature_data: str) -> str:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid base64 signature encoding: {e}",
         )
+    return decoded_bytes
 
+
+def save_signature_base64(signature_data: str) -> str:
+    decoded_bytes = _decode_signature_base64(signature_data)
     ext = _validate_image_bytes(decoded_bytes)
 
     os.makedirs(settings.SIGNATURES_DIR, exist_ok=True)
@@ -231,6 +236,14 @@ async def save_signature_file(file: UploadFile) -> str:
     return f"/{settings.SIGNATURES_DIR}/{filename}".replace("\\", "/")
 
 
+def _require_payment_for_consent(data: TreatmentRecordCreate | TreatmentRecordUpdate) -> None:
+    if data.signature_url is not None or data.signature_base64 is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Patient consent can be added when the secretary records a payment.",
+        )
+
+
 def create_treatment_record(
     db: Session,
     data: TreatmentRecordCreate,
@@ -239,6 +252,7 @@ def create_treatment_record(
 ) -> TreatmentRecordResponse:
     """Creates a new digital treatment entry in the patient ledger."""
 
+    _require_payment_for_consent(data)
     get_patient_user_or_404(db, data.patient_id)
 
 
@@ -250,10 +264,6 @@ def create_treatment_record(
                 detail=f"Doctor user with ID {data.doctor_id} not found.",
             )
 
-    sig_url = data.signature_url
-    if data.signature_base64:
-        sig_url = save_signature_base64(data.signature_base64)
-
     record_date = data.date or date.today()
 
     record = TreatmentRecord(
@@ -263,7 +273,6 @@ def create_treatment_record(
         treatment_name=data.treatment_name.strip(),
         tooth_number=data.tooth_number.strip() if data.tooth_number else None,
         value_of_work=_quantize_money(data.value_of_work),
-        signature_url=sig_url,
         notes=data.notes,
     )
     db.add(record)
@@ -301,6 +310,7 @@ def update_treatment_record(
     ip_address: Optional[str] = None,
 ) -> TreatmentRecordResponse:
     """Updates an existing treatment record entry."""
+    _require_payment_for_consent(data)
     record = get_treatment_record_or_404(db, record_id)
 
     if data.treatment_name is not None:
@@ -318,11 +328,6 @@ def update_treatment_record(
         record.date = data.date
     if data.notes is not None:
         record.notes = data.notes
-    if data.signature_url is not None:
-        record.signature_url = data.signature_url
-    if data.signature_base64:
-        record.signature_url = save_signature_base64(data.signature_base64)
-
     db.commit()
     db.refresh(record)
 
@@ -404,8 +409,38 @@ def create_payment(
         receipt_no=data.receipt_no.strip() if data.receipt_no else None,
         notes=data.notes,
     )
+    request_id = str(data.payment_request_id) if data.payment_request_id else None
+    if request_id:
+        payment.capture = PaymentCapture(
+            request_id=request_id,
+            reused_from_payment_id=data.reuse_consent_payment_id,
+        )
+        if data.consent_signature_base64 is not None:
+            image_data = _decode_signature_base64(data.consent_signature_base64)
+            extension = _validate_image_bytes(image_data)
+            payment.capture.image_data = image_data
+            payment.capture.media_type = "image/jpeg" if extension == ".jpg" else f"image/{extension[1:]}"
+
+        previous = db.get(PaymentCapture, request_id)
+        if previous is not None:
+            return _replay_payment(previous, payment)
+
+        if data.reuse_consent_payment_id is not None:
+            source = db.get(Payment, data.reuse_consent_payment_id)
+            if source is None or source.patient_id != patient_id or not source.has_consent:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No saved signature was found for this patient.")
+            payment.capture.image_data = source.capture.image_data
+            payment.capture.media_type = source.capture.media_type
+
     db.add(payment)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        previous = db.get(PaymentCapture, request_id) if request_id else None
+        if previous is not None:
+            return _replay_payment(previous, payment)
+        raise
     db.refresh(payment)
 
     log_event(
@@ -419,9 +454,27 @@ def create_payment(
             "amount": str(payment.amount),
             "method": payment.method.value if payment.method else None,
             "patient_id": payment.patient_id,
+            "has_consent": payment.has_consent,
+            "reused_from_payment_id": data.reuse_consent_payment_id,
         },
     )
 
+    return PaymentResponse.model_validate(payment)
+
+
+def _replay_payment(previous: PaymentCapture, requested: Payment) -> PaymentResponse:
+    payment = previous.payment
+    if (
+        payment.treatment_record_id != requested.treatment_record_id
+        or payment.patient_id != requested.patient_id
+        or payment.amount != requested.amount
+        or payment.method != requested.method
+        or payment.receipt_no != requested.receipt_no
+        or payment.notes != requested.notes
+        or previous.reused_from_payment_id != requested.capture.reused_from_payment_id
+        or (previous.reused_from_payment_id is None and previous.image_data != requested.capture.image_data)
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This payment was already submitted. Review the patient ledger.")
     return PaymentResponse.model_validate(payment)
 
 

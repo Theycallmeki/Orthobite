@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRecordStore } from '@/stores/record'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAuthStore } from '@/stores/auth'
 import { patientsApi, type PatientResponse } from '@/api/patient'
-import type { TreatmentRecordResponse, PaymentMethod } from '@/api/record'
+import { recordsApi, type PaymentResponse, type TreatmentRecordResponse } from '@/api/record'
 import ToothMatrix from '@/components/ToothMatrix.vue'
-import SignaturePad from '@/components/SignaturePad.vue'
+import RecordPaymentDialog from '@/components/RecordPaymentDialog.vue'
 import {
   FileText,
   User,
@@ -18,16 +18,13 @@ import {
   Plus,
   RefreshCw,
   Search,
-  PenLine,
   Layers,
   CreditCard,
-  Receipt,
   ShieldCheck,
   RotateCcw,
   Eye,
   X,
   Loader2,
-  ChevronDown,
   BookOpen,
 } from 'lucide-vue-next'
 
@@ -48,14 +45,10 @@ const treatmentDate = ref<string>(new Date().toISOString().split('T')[0] || '')
 const attendingDoctorId = ref<number | ''>('')
 const clinicalNotes = ref<string>('')
 
-const signaturePadRef = ref<InstanceType<typeof SignaturePad> | null>(null)
-const capturedSignatureBase64 = ref<string | null>(null)
-
-const recordPaymentNow = ref<boolean>(false)
-const paymentAmount = ref<number | ''>(150)
-const paymentMethod = ref<PaymentMethod>('Cash')
-const paymentReceiptNo = ref<string>('')
-const paymentNotes = ref<string>('')
+const paymentTarget = ref<TreatmentRecordResponse | null>(null)
+const paymentStatus = ref('')
+const paymentError = ref('')
+const isLoadingConsent = ref(false)
 
 const isSubmitting = ref<boolean>(false)
 const submitSuccessMessage = ref<string | null>(null)
@@ -78,11 +71,9 @@ onMounted(async () => {
     await doctorStore.fetchPublicDoctors().catch(() => {})
   }
 
-  if (authStore.isDoctor && doctorStore.myProfile) {
-    attendingDoctorId.value = doctorStore.myProfile.id
-  } else if (doctorStore.activeDoctors.length > 0) {
-    attendingDoctorId.value = doctorStore.activeDoctors[0]?.id || ''
-  }
+  attendingDoctorId.value = authStore.isDoctor
+    ? (authStore.user?.id ?? '')
+    : (doctorStore.activeDoctors[0]?.user_id ?? '')
 
   await loadPatients()
 })
@@ -93,10 +84,11 @@ watch(selectedTeethIds, (newIds) => {
   }
 })
 
-watch(selectedPatient, async (newPat) => {
-  if (newPat) {
-    const targetUserId = newPat.user_id || newPat.id
-    await recordStore.fetchPatientLedger(targetUserId).catch(() => {})
+watch(selectedPatient, async (patient) => {
+  paymentStatus.value = ''
+  paymentError.value = ''
+  if (patient?.user_id) {
+    await recordStore.fetchPatientLedger(patient.user_id).catch(() => {})
   }
 })
 
@@ -127,13 +119,52 @@ const filteredPatients = computed<PatientResponse[]>(() => {
   })
 })
 
-const patientTreatments = computed<TreatmentRecordResponse[]>(() => {
-  return recordStore.currentPatientLedger?.treatments || []
+const selectedLedger = computed(() => {
+  const ledger = recordStore.currentPatientLedger
+  return ledger && ledger.patient_id === selectedPatient.value?.user_id ? ledger : null
 })
+const patientTreatments = computed(() => selectedLedger.value?.treatments ?? [])
+const savedPaymentSignature = computed(() =>
+  selectedLedger.value?.all_payments.find((payment) => payment.has_consent),
+)
+
+function openPayment(record: TreatmentRecordResponse) {
+  paymentTarget.value = record
+  paymentStatus.value = ''
+  paymentError.value = ''
+}
+
+function finishPayment(payment: PaymentResponse) {
+  paymentTarget.value = null
+  paymentStatus.value = payment.has_consent ? 'Payment and signature saved.' : 'Payment saved.'
+}
+
+async function viewPaymentConsent(paymentId: number) {
+  if (isLoadingConsent.value) return
+  isLoadingConsent.value = true
+  paymentError.value = ''
+  try {
+    const { data } = await recordsApi.getPaymentConsent(paymentId)
+    closeSignaturePreview()
+    previewSignatureModalUrl.value = URL.createObjectURL(data)
+  } catch {
+    paymentError.value = 'Could not load the payment signature.'
+  } finally {
+    isLoadingConsent.value = false
+  }
+}
+
+function closeSignaturePreview() {
+  const url = previewSignatureModalUrl.value
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url)
+  previewSignatureModalUrl.value = null
+}
+
+onBeforeUnmount(closeSignaturePreview)
 
 function formatCurrency(val: number | string): string {
   const num = Number(val) || 0
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num)
+  return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(num)
 }
 
 function formatDate(isoStr: string): string {
@@ -153,21 +184,6 @@ function handlePresetClick(preset: string) {
   treatmentName.value = preset
 }
 
-function handleSignatureChange(hasSig: boolean) {
-  if (!hasSig) {
-    capturedSignatureBase64.value = null
-  }
-}
-
-function handleSignatureSave(base64: string) {
-  capturedSignatureBase64.value = base64
-}
-
-function handleClearSignature() {
-  signaturePadRef.value?.clear()
-  capturedSignatureBase64.value = null
-}
-
 function resetForm() {
   treatmentName.value = 'Archwire Replacement (NiTi)'
   selectedTeethIds.value = []
@@ -175,34 +191,17 @@ function resetForm() {
   valueOfWork.value = 150
   treatmentDate.value = new Date().toISOString().split('T')[0] || ''
   clinicalNotes.value = ''
-  handleClearSignature()
-  recordPaymentNow.value = false
-  paymentAmount.value = 150
-  paymentMethod.value = 'Cash'
-  paymentReceiptNo.value = ''
-  paymentNotes.value = ''
-  submitSuccessMessage.value = null
-  submitErrorMessage.value = null
 }
 
 async function handleSaveTreatmentRecord() {
-  if (!selectedPatient.value || !treatmentName.value.trim() || valueOfWork.value === '') return
-
-  const targetPatientId = selectedPatient.value.user_id || selectedPatient.value.id
+  const targetPatientId = selectedPatient.value?.user_id
+  if (isSubmitting.value || !targetPatientId || !treatmentName.value.trim() || valueOfWork.value === '') return
 
   isSubmitting.value = true
   submitSuccessMessage.value = null
   submitErrorMessage.value = null
 
   try {
-    let sigUrl: string | undefined = undefined
-    if (signaturePadRef.value && !signaturePadRef.value.isEmpty()) {
-      const dataUrl = signaturePadRef.value.toDataURL('image/png')
-      capturedSignatureBase64.value = dataUrl
-      const uploadRes = await recordStore.saveSignatureBase64(dataUrl)
-      sigUrl = uploadRes.url
-    }
-
     const newRecord = await recordStore.createTreatmentRecord({
       patient_id: targetPatientId,
       doctor_id: attendingDoctorId.value ? Number(attendingDoctorId.value) : undefined,
@@ -211,24 +210,10 @@ async function handleSaveTreatmentRecord() {
       value_of_work: Number(valueOfWork.value),
       date: treatmentDate.value || undefined,
       notes: clinicalNotes.value.trim() || undefined,
-      signature_url: sigUrl,
-      signature_base64: capturedSignatureBase64.value || undefined,
     })
 
-    if (recordPaymentNow.value && paymentAmount.value !== '') {
-      await recordStore.addPaymentForRecord(newRecord.id, {
-        patient_id: targetPatientId,
-        treatment_record_id: newRecord.id,
-        amount: Number(paymentAmount.value),
-        method: paymentMethod.value,
-        receipt_no: paymentReceiptNo.value.trim() || undefined,
-        notes: paymentNotes.value.trim() || undefined,
-      })
-    }
-
-    await recordStore.fetchPatientLedger(targetPatientId)
-    submitSuccessMessage.value = `Treatment procedure #${newRecord.id} recorded successfully.`
     resetForm()
+    submitSuccessMessage.value = `Treatment procedure #${newRecord.id} recorded successfully.`
   } catch (err: unknown) {
     submitErrorMessage.value =
       (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
@@ -247,7 +232,7 @@ async function handleSaveTreatmentRecord() {
           Clinical Treatment Record Editor
         </h1>
         <p class="text-sm text-slate-500 mt-1">
-          Chart procedures with the 32-tooth matrix, capture patient digital consent, and update installment ledgers with zero drift.
+          Chart treatment and review the patient's balance and payment history.
         </p>
       </div>
 
@@ -263,8 +248,8 @@ async function handleSaveTreatmentRecord() {
 
         <button
           type="button"
-          @click="selectedPatient && recordStore.fetchPatientLedger(selectedPatient.user_id || selectedPatient.id)"
-          :disabled="recordStore.isLoading || !selectedPatient"
+          @click="selectedPatient?.user_id && recordStore.fetchPatientLedger(selectedPatient.user_id)"
+          :disabled="recordStore.isLoading || !selectedPatient?.user_id"
           class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium text-xs transition cursor-pointer shadow-xs disabled:opacity-50"
         >
           <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': recordStore.isLoading }" />
@@ -318,13 +303,13 @@ async function handleSaveTreatmentRecord() {
       </div>
     </div>
 
-    <div v-if="selectedPatient" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div v-if="selectedLedger" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div class="app-panel p-5">
         <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Total Billed Procedures</span>
         <span class="text-2xl font-black text-slate-900 mt-1 block">
           {{ formatCurrency(recordStore.totalValueOfWork) }}
         </span>
-        <p class="text-[11px] text-slate-400 mt-0.5">Historical work for {{ selectedPatient.user?.full_name }}</p>
+        <p class="text-[11px] text-slate-400 mt-0.5">Historical work for {{ selectedLedger.patient_name }}</p>
       </div>
 
       <div class="bg-white rounded-3xl border border-emerald-200 p-5 shadow-xs bg-emerald-50/20">
@@ -415,7 +400,7 @@ async function handleSaveTreatmentRecord() {
           </div>
 
           <div class="space-y-1">
-            <label class="block text-xs font-bold text-slate-700">Value of Work (Fee $) *</label>
+            <label class="block text-xs font-bold text-slate-700">Value of Work (₱) *</label>
             <input
               v-model="valueOfWork"
               type="number"
@@ -448,7 +433,7 @@ async function handleSaveTreatmentRecord() {
               <option
                 v-for="doc in doctorStore.activeDoctors"
                 :key="doc.id"
-                :value="doc.id"
+                :value="doc.user_id"
               >
                 {{ doc.full_name }} ({{ doc.specialty }})
               </option>
@@ -468,87 +453,6 @@ async function handleSaveTreatmentRecord() {
       </div>
 
       <div class="lg:col-span-5 space-y-6">
-        <div class="app-panel p-6 space-y-4">
-          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div class="flex items-center gap-2">
-              <PenLine class="w-5 h-5 text-teal-600" />
-              <h2 class="text-sm font-extrabold text-slate-900">Patient Electronic Consent</h2>
-            </div>
-            <span
-              v-if="capturedSignatureBase64"
-              class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200"
-            >
-              <CheckCircle2 class="w-3 h-3" />
-              Signature Captured
-            </span>
-          </div>
-
-          <SignaturePad
-            ref="signaturePadRef"
-            :height="170"
-            @change="handleSignatureChange"
-            @save="handleSignatureSave"
-          />
-        </div>
-
-        <div class="app-panel p-6 space-y-4">
-          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div class="flex items-center gap-2">
-              <CreditCard class="w-5 h-5 text-teal-600" />
-              <h2 class="text-sm font-extrabold text-slate-900">Installment Payment</h2>
-            </div>
-            <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-teal-800">
-              <input
-                v-model="recordPaymentNow"
-                type="checkbox"
-                class="rounded text-teal-600 focus:ring-teal-500 w-4 h-4 cursor-pointer"
-              />
-              Record Now
-            </label>
-          </div>
-
-          <div v-if="recordPaymentNow" class="space-y-3 pt-1 animate-in fade-in duration-150">
-            <div class="grid grid-cols-2 gap-3">
-              <div class="space-y-1">
-                <label class="block text-xs font-bold text-slate-700">Amount Paid ($) *</label>
-                <input
-                  v-model="paymentAmount"
-                  type="number"
-                  step="0.01"
-                  required
-                  class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div class="space-y-1">
-                <label class="block text-xs font-bold text-slate-700">Payment Method *</label>
-                <select
-                  v-model="paymentMethod"
-                  class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-none cursor-pointer"
-                >
-                  <option value="Cash">Cash</option>
-                  <option value="GCash">GCash</option>
-                  <option value="Card">Card</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="space-y-1">
-              <label class="block text-xs font-bold text-slate-700">Official Receipt # (Optional)</label>
-              <input
-                v-model="paymentReceiptNo"
-                type="text"
-                class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 focus:ring-2 focus:ring-teal-500 focus:outline-none"
-                placeholder="e.g. REC-98412"
-              />
-            </div>
-          </div>
-          <div v-else class="text-xs text-slate-400 py-1">
-            Check the box above to immediately record an installment payment or downpayment towards this procedure.
-          </div>
-        </div>
-
         <div v-if="submitSuccessMessage" class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-emerald-800 text-xs">
           <CheckCircle2 class="w-4 h-4 shrink-0" />
           <span>{{ submitSuccessMessage }}</span>
@@ -562,12 +466,12 @@ async function handleSaveTreatmentRecord() {
         <button
           type="button"
           @click="handleSaveTreatmentRecord"
-          :disabled="isSubmitting || !selectedPatient || !treatmentName.trim() || valueOfWork === ''"
+          :disabled="isSubmitting || !selectedPatient?.user_id || !treatmentName.trim() || valueOfWork === ''"
           class="w-full py-4 px-6 rounded-2xl app-primary-action font-extrabold text-sm transition shadow-lg shadow-teal-600/25 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-98"
         >
           <Loader2 v-if="isSubmitting" class="w-4 h-4 animate-spin" />
           <CheckCircle2 v-else class="w-4 h-4" />
-          <span>{{ isSubmitting ? 'Recording Clinical Sheet...' : 'Save Treatment Record & Ledger' }}</span>
+          <span>{{ isSubmitting ? 'Recording Clinical Sheet...' : 'Save Treatment Record' }}</span>
         </button>
       </div>
     </div>
@@ -587,6 +491,8 @@ async function handleSaveTreatmentRecord() {
         </span>
       </div>
 
+      <p v-if="paymentStatus" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ paymentStatus }}</p>
+      <p v-if="paymentError" role="alert" class="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{{ paymentError }}</p>
       <div v-if="patientTreatments.length === 0" class="py-12 text-center text-xs text-slate-400 space-y-2">
         <BookOpen class="w-6 h-6 mx-auto text-slate-300" />
         <p>No prior treatment records logged for this patient.</p>
@@ -639,6 +545,28 @@ async function handleSaveTreatmentRecord() {
             <span class="font-semibold text-slate-700">Notes:</span> {{ rec.notes }}
           </div>
 
+          <div v-if="authStore.isSecretary || rec.payments.some((payment) => payment.has_consent)" class="flex flex-wrap items-center gap-2">
+            <button
+              v-if="authStore.isSecretary && Number(rec.balance) > 0"
+              type="button"
+              class="app-primary-action inline-flex items-center gap-2 rounded-lg px-3 py-2 font-semibold"
+              @click="openPayment(rec)"
+            >
+              <CreditCard class="size-4" aria-hidden="true" />
+              Record Payment
+            </button>
+            <button
+              v-for="payment in rec.payments.filter((entry) => entry.has_consent)"
+              :key="payment.id"
+              type="button"
+              class="rounded-lg border border-slate-200 bg-white px-3 py-2 font-semibold text-teal-800 hover:bg-teal-50"
+              :disabled="isLoadingConsent"
+              @click="viewPaymentConsent(payment.id)"
+            >
+              View signature · {{ payment.receipt_no || '#' + payment.id }}
+            </button>
+          </div>
+
           <div v-if="rec.signature_url" class="flex items-center justify-between pt-1 text-[11px] text-slate-500">
             <span class="flex items-center gap-1 text-emerald-700 font-medium">
               <ShieldCheck class="w-3.5 h-3.5" />
@@ -658,6 +586,14 @@ async function handleSaveTreatmentRecord() {
       </div>
     </div>
 
+    <RecordPaymentDialog
+      v-if="paymentTarget"
+      :record="paymentTarget"
+      :saved-signature="savedPaymentSignature"
+      @close="paymentTarget = null"
+      @saved="finishPayment"
+    />
+
     <div
       v-if="previewSignatureModalUrl"
       class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs"
@@ -670,7 +606,7 @@ async function handleSaveTreatmentRecord() {
           </div>
           <button
             type="button"
-            @click="previewSignatureModalUrl = null"
+            @click="closeSignaturePreview"
             class="text-slate-400 hover:text-slate-600 p-1"
           >
             <X class="w-5 h-5" />
@@ -688,7 +624,7 @@ async function handleSaveTreatmentRecord() {
         <div class="pt-2 text-center">
           <button
             type="button"
-            @click="previewSignatureModalUrl = null"
+            @click="closeSignaturePreview"
             class="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
           >
             Close
