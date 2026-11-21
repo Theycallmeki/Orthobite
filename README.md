@@ -110,8 +110,10 @@ orthobite/
    ```
 3. Install dependencies:
    ```bash
+   cd backend
    pip install -r requirements.txt
    ```
+   The backend uses SQLite by default. To use PostgreSQL, set `DATABASE_URL` in an untracked `backend/.env` file or in the deployment environment. When starting the server from `backend/`, it creates missing tables in the configured database.
 4. Run the FastAPI development server:
    ```bash
    python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -119,7 +121,7 @@ orthobite/
    Interactive Swagger API documentation will be available at `http://localhost:8000/docs`.
 
 ### Frontend Setup
-1. Navigate to the `frontend/` directory:
+1. From the repository root, navigate to the `frontend/` directory:
    ```bash
    cd frontend
    ```

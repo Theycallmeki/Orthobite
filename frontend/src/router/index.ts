@@ -175,11 +175,13 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
-  const allowedRoles = to.matched
-    .flatMap((record) => (record.meta.roles as string[]) || [])
-    .filter(Boolean)
+  const role = authStore.role
+  const isRoleRestricted = to.matched.some((record) => {
+    const allowedRoles = record.meta.roles as string[] | undefined
+    return allowedRoles !== undefined && (!role || !allowedRoles.includes(role))
+  })
 
-  if (allowedRoles.length > 0 && authStore.role && !allowedRoles.includes(authStore.role)) {
+  if (isRoleRestricted) {
     if (authStore.isAdmin) {
       next('/admin/analytics')
     } else if (authStore.isDoctor || authStore.isSecretary) {

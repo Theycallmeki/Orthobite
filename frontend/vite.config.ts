@@ -21,11 +21,12 @@ export default defineConfig({
     proxy: {
       '/auth': 'http://localhost:8000',
       '/users': 'http://localhost:8000',
+      '/patients': 'http://localhost:8000',
       '/doctors': 'http://localhost:8000',
       '/appointments': 'http://localhost:8000',
       '/records': 'http://localhost:8000',
       '/chat': 'http://localhost:8000',
-      '/admin': 'http://localhost:8000',
+      '^/admin/(analytics|audit)/[^/?]': 'http://localhost:8000',
       '/notifications': 'http://localhost:8000',
       '/uploads': 'http://localhost:8000',
       '/ws': {

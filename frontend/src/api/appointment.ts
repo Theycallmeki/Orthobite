@@ -109,7 +109,7 @@ export const appointmentsApi = {
 
 
   cancelAppointment(id: number, reason?: string): Promise<AxiosResponse<AppointmentResponse>> {
-    return apiClient.post(`/appointments/${id}/cancel`, null, {
+    return apiClient.delete(`/appointments/${id}`, {
       params: { reason },
     })
   },

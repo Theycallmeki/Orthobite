@@ -41,7 +41,7 @@ This document provides a comprehensive index of all RESTful HTTP endpoints and W
 | `GET` | `/appointments/{id}` | Authenticated | Get detailed appointment metadata |
 | `PATCH` | `/appointments/{id}` | Staff | Reschedule or update visit notes |
 | `PATCH` | `/appointments/{id}/status` | Staff / Doctor | Transition status (`confirmed`, `completed`, `no_show`) |
-| `POST` | `/appointments/{id}/cancel` | Patient / Staff | Cancel appointment with mandatory cancellation reason |
+| `DELETE` | `/appointments/{id}` | Patient / Staff | Cancel an appointment with an optional `reason` query parameter |
 | `GET` | `/appointments/schedule/daily` | Staff / Doctor | Daily schedule matrix with 30-min slot allocations |
 
 ---
