@@ -1,4 +1,4 @@
-fastapi
+fastapi>=0.165.0
 slowapi
 uvicorn[standard]
 sqlalchemy
@@ -11,6 +11,7 @@ passlib[bcrypt]
 bcrypt==4.0.1
 python-jose[cryptography]
 pillow
+pypdf>=7.1.1
 aiofiles
 psycopg[binary]
 apscheduler

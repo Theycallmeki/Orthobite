@@ -8,16 +8,16 @@ ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP"}
 MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
 
 
-def validate_image_bytes(data: bytes) -> str:
+def validate_image_bytes(data: bytes, *, max_size_bytes: int = MAX_IMAGE_SIZE_BYTES) -> str:
     if not data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Image data cannot be empty.",
         )
-    if len(data) > MAX_IMAGE_SIZE_BYTES:
+    if len(data) > max_size_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Image size exceeds the maximum allowed limit of {MAX_IMAGE_SIZE_BYTES // (1024 * 1024)}MB.",
+            detail=f"Image size exceeds the maximum allowed limit of {max_size_bytes // (1024 * 1024)}MB.",
         )
     try:
         image = Image.open(io.BytesIO(data))
