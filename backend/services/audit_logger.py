@@ -15,6 +15,26 @@ from models.audit import AuditAction, AuditLog
 logger = logging.getLogger("orthobite.audit")
 
 
+def add_audit_event(
+    db: Session,
+    action: AuditAction,
+    resource: str,
+    actor_id: Optional[int] = None,
+    resource_id: Optional[int] = None,
+    ip_address: Optional[str] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Stage an audit entry for callers that commit it with their data changes."""
+    db.add(AuditLog(
+        actor_id=actor_id,
+        action=action,
+        resource=resource,
+        resource_id=resource_id,
+        ip_address=ip_address,
+        extra=extra,
+    ))
+
+
 def log_event(
     db:          Session,
     action:      AuditAction,
@@ -38,15 +58,7 @@ def log_event(
     extra       : Any JSON-serialisable dict for additional context.
     """
     try:
-        entry = AuditLog(
-            actor_id=actor_id,
-            action=action,
-            resource=resource,
-            resource_id=resource_id,
-            ip_address=ip_address,
-            extra=extra,
-        )
-        db.add(entry)
+        add_audit_event(db, action, resource, actor_id, resource_id, ip_address, extra)
         db.commit()
     except Exception as exc:                    
         logger.error("audit_logger: failed to write audit entry — %s", exc)

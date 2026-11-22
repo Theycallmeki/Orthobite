@@ -21,10 +21,10 @@ router = APIRouter(prefix="/patients", tags=["Patients"])
 def create_patient(
     data: PatientCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    current_user: User = Depends(require_staff),
 ):
     """Create a new patient clinical profile and record."""
-    return patient_controller.create_patient(db, data)
+    return patient_controller.create_patient(db, data, current_user)
 
 
 @router.get(
@@ -89,10 +89,10 @@ def update_patient(
     patient_id: int,
     data: PatientUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_staff),
+    current_user: User = Depends(require_staff),
 ):
-    """Update treatment stage, notes, or assigned orthodontist."""
-    return patient_controller.update_patient(db, patient_id, data)
+    """Update patient details. Doctor assignment changes require an administrator."""
+    return patient_controller.update_patient(db, patient_id, data, current_user)
 
 
 @router.delete(

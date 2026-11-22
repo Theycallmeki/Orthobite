@@ -22,6 +22,7 @@ from middleware import setup_middleware
 from routes.auth import router as auth_router
 from routes.user import router as user_router
 from routes.patient import router as patient_router
+from routes.patient_file import router as patient_file_router
 from routes.doctor import router as doctor_router
 from routes.appointment import router as appointment_router
 from routes.notification import router as notification_router
@@ -107,6 +108,7 @@ def health():
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(patient_router)
+app.include_router(patient_file_router)
 app.include_router(doctor_router)
 app.include_router(appointment_router)
 app.include_router(notification_router)
