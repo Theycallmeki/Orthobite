@@ -89,6 +89,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/clinic/TreatmentHistoryView.vue'),
       },
       {
+        path: 'records/files',
+        name: 'clinic-patient-files',
+        component: () => import('@/views/clinic/PatientFilesView.vue'),
+        meta: { roles: ['doctor', 'orthodontist', 'admin'] },
+      },
+      {
         path: 'consultation-fee',
         name: 'clinic-consultation-fee',
         component: () => import('@/views/clinic/ConsultationFeeView.vue'),
