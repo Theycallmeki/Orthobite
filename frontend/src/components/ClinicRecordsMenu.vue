@@ -3,18 +3,26 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Menu from 'primevue/menu'
 import { ChevronDown, ClipboardList } from 'lucide-vue-next'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{ mobile?: boolean }>()
 const menu = ref<InstanceType<typeof Menu> | null>(null)
 const open = ref(false)
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const menuId = computed(() => props.mobile ? 'clinic-records-menu-mobile' : 'clinic-records-menu')
-const inRecords = computed(() => route.name === 'clinic-records' || route.name === 'clinic-treatment-history')
-const items = [
-  { label: 'Record Editor', command: () => goTo('clinic-records') },
-  { label: 'Treatment History', command: () => goTo('clinic-treatment-history') },
-]
+const inRecords = computed(() => ['clinic-records', 'clinic-treatment-history', 'clinic-patient-files'].some((name) => name === route.name))
+const items = computed(() => {
+  const links = [
+    { label: 'Record Editor', command: () => goTo('clinic-records') },
+    { label: 'Treatment History', command: () => goTo('clinic-treatment-history') },
+  ]
+  if (authStore.isDoctor || authStore.isAdmin) {
+    links.push({ label: 'Documents', command: () => goTo('clinic-patient-files') })
+  }
+  return links
+})
 
 function goTo(name: string) {
   const patient = route.query.patient
