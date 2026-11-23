@@ -95,16 +95,18 @@ const routes: RouteRecordRaw[] = [
         meta: { roles: ['doctor', 'orthodontist', 'admin'] },
       },
       {
-        path: 'consultation-fee',
-        name: 'clinic-consultation-fee',
-        component: () => import('@/views/clinic/ConsultationFeeView.vue'),
+        path: 'booking-settings',
+        name: 'clinic-booking-settings',
+        component: () => import('@/views/clinic/BookingSettingsView.vue'),
         meta: { roles: ['doctor', 'orthodontist'] },
       },
       {
+        path: 'consultation-fee',
+        redirect: { name: 'clinic-booking-settings' },
+      },
+      {
         path: 'availability',
-        name: 'clinic-availability',
-        component: () => import('@/views/clinic/DoctorAvailabilityView.vue'),
-        meta: { roles: ['doctor', 'orthodontist'] },
+        redirect: { name: 'clinic-booking-settings' },
       },
       {
         path: 'chat',

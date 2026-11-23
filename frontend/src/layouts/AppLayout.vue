@@ -14,7 +14,6 @@ import {
   BarChart3,
   ShieldCheck,
   ClipboardList,
-  Wallet,
   LogOut,
   User,
 } from 'lucide-vue-next'
@@ -53,9 +52,7 @@ const navLinks = computed(() => {
       { name: 'Appointments', path: '/clinic/appointments', icon: Calendar },
       { name: 'Patient Records', path: '/clinic/records', icon: ClipboardList },
     )
-    if (authStore.isDoctor) {
-      links.push({ name: 'Consultation Fee', path: '/clinic/consultation-fee', icon: Wallet })
-    } else {
+    if (authStore.isSecretary) {
       links.push({
         name: 'Live Chat',
         path: '/clinic/chat',
@@ -74,6 +71,10 @@ const navLinks = computed(() => {
 
   return links
 })
+
+function isNavActive(path: string) {
+  return route.path === path || (path === '/clinic/appointments' && route.name === 'clinic-booking-settings')
+}
 
 function handleLogout() {
   chatStore.resetChat()
@@ -97,7 +98,7 @@ function handleLogout() {
                   v-else
                   :to="link.path"
                   class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                  :class="route.path === link.path
+                  :class="isNavActive(link.path)
                     ? 'bg-teal-50 text-teal-700 font-semibold'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'"
                 >
@@ -150,7 +151,7 @@ function handleLogout() {
             v-else
             :to="link.path"
             class="flex flex-col items-center gap-1 py-1 px-2 rounded-md text-xs font-medium"
-            :class="route.path === link.path ? 'text-teal-700 font-semibold' : 'text-slate-600'"
+            :class="isNavActive(link.path) ? 'text-teal-700 font-semibold' : 'text-slate-600'"
           >
             <div class="relative">
               <component :is="link.icon" class="w-5 h-5" />

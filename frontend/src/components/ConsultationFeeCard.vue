@@ -5,8 +5,6 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import { useDoctorStore } from '@/stores/doctor'
 
-defineProps<{ heading?: 'h1' | 'h2' }>()
-
 const doctorStore = useDoctorStore()
 const maxFee = 99_999_999.99
 const feeFormat = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })
@@ -67,9 +65,7 @@ onMounted(loadFee)
 <template>
   <section aria-labelledby="consultation-fee-heading" class="app-panel grid gap-5 p-5 sm:p-6 md:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
     <div>
-      <component :is="heading ?? 'h2'" id="consultation-fee-heading" class="font-bold tracking-tight text-slate-900" :class="heading === 'h1' ? 'text-2xl' : 'text-lg'">
-        Consultation Fee
-      </component>
+      <h2 id="consultation-fee-heading" class="text-lg font-bold tracking-tight text-slate-900">Consultation Fee</h2>
       <p class="mt-1 text-sm text-slate-600">Patients see this fee when booking a consultation with you.</p>
       <p v-if="currentFee !== null" class="mt-3">
         <span class="block text-sm font-medium text-slate-600">Current fee</span>
