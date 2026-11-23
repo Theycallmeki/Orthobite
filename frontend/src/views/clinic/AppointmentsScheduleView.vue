@@ -28,6 +28,7 @@ import {
   Mail,
   UserCheck,
   Edit3,
+  Settings,
 } from 'lucide-vue-next'
 
 const appointmentStore = useAppointmentStore()
@@ -385,11 +386,11 @@ async function submitAdminBooking() {
         </button>
         <RouterLink
           v-if="authStore.isDoctor"
-          :to="{ name: 'clinic-availability' }"
+          :to="{ name: 'clinic-booking-settings' }"
           class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl app-primary-action font-semibold text-xs shadow-md shadow-teal-600/20"
         >
-          <Calendar class="size-4" />
-          My Availability
+          <Settings class="size-4" aria-hidden="true" />
+          Booking Settings
         </RouterLink>
       </div>
     </div>

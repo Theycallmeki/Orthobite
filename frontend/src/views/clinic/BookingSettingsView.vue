@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import Button from 'primevue/button'
 import { ArrowLeft, Plus, X } from 'lucide-vue-next'
 import { doctorsApi, type AvailabilityRule, type TimeOff } from '@/api/doctor'
+import ConsultationFeeCard from '@/components/ConsultationFeeCard.vue'
 
 type WorkingHours = Omit<AvailabilityRule, 'slot_duration_minutes'> & {
   key: number
@@ -172,13 +173,15 @@ onMounted(loadSchedule)
   <div class="space-y-5 pb-12">
     <header class="app-panel app-page-heading flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900">My Availability</h1>
-        <p class="mt-1 text-sm text-slate-600">Set the times patients can request with you. Times are in Philippine time.</p>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Booking Settings</h1>
+        <p class="mt-1 text-sm text-slate-600">Set your consultation fee and availability. Schedule times are in Philippine time.</p>
       </div>
       <RouterLink :to="{ name: 'clinic-appointments' }" class="inline-flex items-center gap-2 text-sm font-semibold text-teal-800 hover:underline">
         <ArrowLeft class="size-4" /> Appointments
       </RouterLink>
     </header>
+
+    <ConsultationFeeCard />
 
     <div v-if="loadError" class="app-panel space-y-3 p-5">
       <p role="alert" class="text-sm text-rose-700">{{ loadError }}</p>
