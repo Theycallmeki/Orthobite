@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useRecordStore } from '@/stores/record'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAuthStore } from '@/stores/auth'
@@ -25,9 +26,18 @@ import {
 const recordStore = useRecordStore()
 const doctorStore = useDoctorStore()
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients } = useClinicPatientSelection()
 const patientSearchQuery = ref('')
+const patientViews = ['Cards', 'Table'] as const
+const patientView = computed(() => route.query.view === 'table' ? 'Table' : 'Cards')
+
+function setPatientView(view: typeof patientViews[number]) {
+  if (view === patientView.value) return
+  void router.replace({ query: { ...route.query, view: view === 'Table' ? 'table' : undefined } })
+}
 
 const selectedTeethIds = ref<number[]>([])
 const treatmentName = ref<string>('Archwire Replacement (NiTi)')
@@ -196,14 +206,30 @@ async function handleSaveTreatmentRecord() {
           <h2 class="text-sm font-extrabold text-slate-900">Patient Selection & Profile</h2>
         </div>
 
-        <div class="relative min-w-64">
-          <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            v-model="patientSearchQuery"
-            type="text"
-            placeholder="Search patient by name or ID..."
-            class="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
-          />
+        <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div role="group" aria-label="Patient list view" class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              v-for="view in patientViews"
+              :key="view"
+              type="button"
+              :aria-pressed="patientView === view"
+              class="rounded-md px-3 py-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-teal-700"
+              :class="patientView === view ? 'bg-teal-50 text-teal-800 shadow-xs' : 'text-slate-600 hover:bg-white'"
+              @click="setPatientView(view)"
+            >
+              {{ view }}
+            </button>
+          </div>
+          <div class="relative w-full sm:w-64">
+            <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
+            <input
+              v-model="patientSearchQuery"
+              type="text"
+              aria-label="Search patients"
+              placeholder="Search by name, email, or ID…"
+              class="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+            />
+          </div>
         </div>
       </div>
 
@@ -211,6 +237,34 @@ async function handleSaveTreatmentRecord() {
       <div v-else-if="patientLoadError" class="flex items-center gap-3 text-sm text-rose-700">
         <p role="alert">Could not load patients.</p>
         <button type="button" class="underline" @click="loadPatients">Retry</button>
+      </div>
+      <p v-else-if="!filteredPatients.length" role="status" class="text-sm text-slate-600">
+        {{ patientSearchQuery.trim() ? 'No matching patients.' : 'No patients available.' }}
+      </p>
+      <div v-else-if="patientView === 'Table'" class="max-h-56 overflow-auto rounded-lg border border-slate-200">
+        <table aria-label="Patients" class="w-full text-left text-sm">
+          <thead class="bg-slate-50 text-xs text-slate-600">
+            <tr>
+              <th scope="col" class="px-3 py-2 whitespace-nowrap">Patient ID</th>
+              <th scope="col" class="w-full px-3 py-2">Name</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">
+            <tr v-for="pat in filteredPatients" :key="pat.id" :class="selectedPatient?.id === pat.id ? 'bg-teal-50' : 'hover:bg-slate-50'">
+              <td class="px-3 py-2 tabular-nums text-slate-700">{{ pat.id }}</td>
+              <td class="px-3 py-2">
+                <button
+                  type="button"
+                  :aria-pressed="selectedPatient?.id === pat.id"
+                  class="rounded text-left font-semibold text-teal-800 hover:underline focus-visible:outline-2 focus-visible:outline-teal-700"
+                  @click="selectPatient(pat.id)"
+                >
+                  {{ pat.user?.full_name || `Patient #${pat.id}` }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <div v-else class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-40 overflow-y-auto p-1">
         <div
@@ -232,7 +286,7 @@ async function handleSaveTreatmentRecord() {
               {{ pat.user?.full_name || `Patient #${pat.id}` }}
             </p>
             <p class="text-[10px] text-slate-500 truncate">
-              ID #{{ pat.user_id || pat.id }} &bull; {{ pat.treatment_stage || 'Consultation' }}
+              ID #{{ pat.id }} &bull; {{ pat.treatment_stage || 'Consultation' }}
             </p>
           </div>
         </div>
