@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional, List
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models.doctor import AvailabilityRule, DoctorProfile, TimeOff
@@ -51,19 +52,30 @@ def get_or_create_doctor_profile_for_user(db: Session, user: User) -> DoctorProf
             detail="Only doctors can have a doctor profile.",
         )
 
-    profile = db.query(DoctorProfile).filter(DoctorProfile.user_id == user.id).first()
-    if not profile:
-        profile = DoctorProfile(
-            user_id=user.id,
-            specialty="Orthodontics & Bite Alignment",
-            bio="Dedicated orthodontics specialist providing modern bite alignment treatments.",
-            years_of_experience=5,
-            is_accepting_patients=True,
-        )
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
+    profiles = db.query(DoctorProfile).filter(DoctorProfile.user_id == user.id)
+    profile = profiles.first()
+    if profile is not None:
+        return profile
 
+    profile = DoctorProfile(
+        user_id=user.id,
+        specialty="Orthodontics & Bite Alignment",
+        bio="Dedicated orthodontics specialist providing modern bite alignment treatments.",
+        years_of_experience=5,
+        is_accepting_patients=True,
+    )
+    db.add(profile)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Booking Settings can load the profile, weekly hours, and time off in parallel.
+        db.rollback()
+        existing_profile = profiles.first()
+        if existing_profile is None:
+            raise
+        return existing_profile
+
+    db.refresh(profile)
     return profile
 
 
