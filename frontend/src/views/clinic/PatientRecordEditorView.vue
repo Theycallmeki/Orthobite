@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { PatientResponse } from '@/api/patient'
 import { useRecordStore } from '@/stores/record'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAuthStore } from '@/stores/auth'
@@ -21,6 +22,9 @@ import {
   RotateCcw,
   Loader2,
   BookOpen,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
 } from 'lucide-vue-next'
 
 const recordStore = useRecordStore()
@@ -33,10 +37,31 @@ const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadEr
 const patientSearchQuery = ref('')
 const patientViews = ['Cards', 'Table'] as const
 const patientView = computed(() => route.query.view === 'table' ? 'Table' : 'Cards')
+const patientSortColumns = [{ key: 'id', label: 'Patient ID' }, { key: 'name', label: 'Name' }] as const
+type PatientSortColumn = typeof patientSortColumns[number]['key']
+const patientSort = ref<{ column: PatientSortColumn; direction: 'ascending' | 'descending' }>()
+const patientNameCollator = new Intl.Collator('en-PH', { sensitivity: 'base', numeric: true })
 
 function setPatientView(view: typeof patientViews[number]) {
   if (view === patientView.value) return
   void router.replace({ query: { ...route.query, view: view === 'Table' ? 'table' : undefined } })
+}
+
+function togglePatientSort(column: PatientSortColumn) {
+  const current = patientSort.value
+  patientSort.value = {
+    column,
+    direction: current?.column === column && current.direction === 'ascending' ? 'descending' : 'ascending',
+  }
+}
+
+function patientName(patient: PatientResponse) {
+  return patient.user?.full_name?.trim() || `Patient #${patient.id}`
+}
+
+function formatTreatmentStage(stage: string | undefined) {
+  const label = stage?.replaceAll('_', ' ').trim()
+  return label ? label.charAt(0).toUpperCase() + label.slice(1) : '—'
 }
 
 const selectedTeethIds = ref<number[]>([])
@@ -91,10 +116,21 @@ watch(selectedPatient, (patient) => {
 const filteredPatients = computed(() => {
   const query = patientSearchQuery.value.trim().toLowerCase()
   return patients.value.filter((patient) =>
-    (patient.user?.full_name ?? '').toLowerCase().includes(query)
+    patientName(patient).toLowerCase().includes(query)
     || (patient.user?.email ?? '').toLowerCase().includes(query)
     || String(patient.id).includes(query),
   )
+})
+
+const sortedPatients = computed(() => {
+  const sort = patientSort.value
+  if (!sort) return filteredPatients.value
+
+  return [...filteredPatients.value].sort((left, right) => {
+    const nameOrder = sort.column === 'name' ? patientNameCollator.compare(patientName(left), patientName(right)) : 0
+    const order = nameOrder || left.id - right.id
+    return sort.direction === 'ascending' ? order : -order
+  })
 })
 
 const selectedLedger = computed(() => {
@@ -241,27 +277,56 @@ async function handleSaveTreatmentRecord() {
       <p v-else-if="!filteredPatients.length" role="status" class="text-sm text-slate-600">
         {{ patientSearchQuery.trim() ? 'No matching patients.' : 'No patients available.' }}
       </p>
-      <div v-else-if="patientView === 'Table'" class="max-h-56 overflow-auto rounded-lg border border-slate-200">
-        <table aria-label="Patients" class="w-full text-left text-sm">
-          <thead class="bg-slate-50 text-xs text-slate-600">
+      <div
+        v-else-if="patientView === 'Table'"
+        role="region"
+        aria-label="Patient table"
+        tabindex="0"
+        class="max-h-64 overflow-auto rounded-lg border border-slate-200 focus-visible:outline-2 focus-visible:outline-teal-700"
+      >
+        <table aria-label="Patients" class="w-full min-w-[38rem] table-fixed text-left text-sm">
+          <thead class="sticky top-0 z-10 bg-slate-50 text-xs text-slate-600 shadow-xs">
             <tr>
-              <th scope="col" class="px-3 py-2 whitespace-nowrap">Patient ID</th>
-              <th scope="col" class="w-full px-3 py-2">Name</th>
+              <th
+                v-for="column in patientSortColumns"
+                :key="column.key"
+                scope="col"
+                :aria-sort="patientSort?.column === column.key ? patientSort.direction : undefined"
+                class="px-3 py-2"
+                :class="column.key === 'id' ? 'w-28' : 'w-[30%]'"
+              >
+                <button
+                  type="button"
+                  :aria-label="`Sort by ${column.label}`"
+                  class="inline-flex items-center gap-1.5 rounded whitespace-nowrap hover:text-teal-800 focus-visible:outline-2 focus-visible:outline-teal-700"
+                  :class="patientSort?.column === column.key ? 'text-teal-800' : ''"
+                  @click="togglePatientSort(column.key)"
+                >
+                  {{ column.label }}
+                  <ArrowUpDown v-if="patientSort?.column !== column.key" class="size-3.5" aria-hidden="true" />
+                  <ArrowUp v-else-if="patientSort.direction === 'ascending'" class="size-3.5" aria-hidden="true" />
+                  <ArrowDown v-else class="size-3.5" aria-hidden="true" />
+                </button>
+              </th>
+              <th scope="col" class="w-36 px-3 py-2 whitespace-nowrap">Treatment Stage</th>
+              <th scope="col" class="px-3 py-2">Email</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-200">
-            <tr v-for="pat in filteredPatients" :key="pat.id" :class="selectedPatient?.id === pat.id ? 'bg-teal-50' : 'hover:bg-slate-50'">
+            <tr v-for="pat in sortedPatients" :key="pat.id" :class="selectedPatient?.id === pat.id ? 'bg-teal-50' : 'hover:bg-slate-50'">
               <td class="px-3 py-2 tabular-nums text-slate-700">{{ pat.id }}</td>
               <td class="px-3 py-2">
                 <button
                   type="button"
                   :aria-pressed="selectedPatient?.id === pat.id"
-                  class="rounded text-left font-semibold text-teal-800 hover:underline focus-visible:outline-2 focus-visible:outline-teal-700"
+                  class="rounded text-left font-semibold wrap-anywhere text-teal-800 hover:underline focus-visible:outline-2 focus-visible:outline-teal-700"
                   @click="selectPatient(pat.id)"
                 >
-                  {{ pat.user?.full_name || `Patient #${pat.id}` }}
+                  {{ patientName(pat) }}
                 </button>
               </td>
+              <td class="px-3 py-2 text-slate-600">{{ formatTreatmentStage(pat.treatment_stage) }}</td>
+              <td class="px-3 py-2 wrap-anywhere text-slate-600">{{ pat.user?.email || '—' }}</td>
             </tr>
           </tbody>
         </table>
@@ -283,7 +348,7 @@ async function handleSaveTreatmentRecord() {
           </div>
           <div class="min-w-0 flex-1">
             <p class="text-xs font-bold text-slate-900 truncate">
-              {{ pat.user?.full_name || `Patient #${pat.id}` }}
+              {{ patientName(pat) }}
             </p>
             <p class="text-[10px] text-slate-500 truncate">
               ID #{{ pat.id }} &bull; {{ pat.treatment_stage || 'Consultation' }}
