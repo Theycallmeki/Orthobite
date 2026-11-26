@@ -14,6 +14,11 @@ export function useClinicPatientSelection(doctorId?: number) {
     if (typeof id !== 'string') return patients.value[0] ?? null
     return patients.value.find((patient) => String(patient.id) === id) ?? null
   })
+  const patientLinkQuery = computed(() => {
+    const patient = route.query.patient
+    if (typeof patient === 'string') return { patient }
+    return selectedPatient.value ? { patient: String(selectedPatient.value.id) } : {}
+  })
 
   function selectPatient(id: number) {
     void router.replace({ query: { ...route.query, patient: String(id) } })
@@ -43,5 +48,5 @@ export function useClinicPatientSelection(doctorId?: number) {
   }
 
   onMounted(loadPatients)
-  return { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients }
+  return { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients, patientLinkQuery }
 }

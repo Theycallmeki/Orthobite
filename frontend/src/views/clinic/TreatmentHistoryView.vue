@@ -20,7 +20,7 @@ import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients } = useClinicPatientSelection()
+const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients, patientLinkQuery } = useClinicPatientSelection()
 const ledger = ref<PatientLedgerSummary | null>(null)
 const activeTab = ref('history')
 const recordViews = ['Cards', 'Table'] as const
@@ -184,7 +184,7 @@ onBeforeUnmount(() => {
           Treatment History<span v-if="selectedPatient?.user?.full_name"> for {{ selectedPatient.user.full_name }}</span>
         </h1>
         <RouterLink
-          :to="{ name: 'clinic-records', query: selectedPatient ? { patient: String(selectedPatient.id) } : {} }"
+          :to="{ name: 'clinic-records', query: patientLinkQuery }"
           class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-teal-700 hover:bg-teal-50"
         >
           Record Editor

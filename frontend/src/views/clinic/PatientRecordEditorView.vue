@@ -33,7 +33,7 @@ const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
-const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients } = useClinicPatientSelection()
+const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients, patientLinkQuery } = useClinicPatientSelection()
 const patientSearchQuery = ref('')
 const patientViews = ['Cards', 'Table'] as const
 const patientView = computed(() => route.query.view === 'table' ? 'Table' : 'Cards')
@@ -208,7 +208,7 @@ async function handleSaveTreatmentRecord() {
 
       <div class="flex flex-wrap items-center gap-2.5">
         <RouterLink
-          :to="{ name: 'clinic-treatment-history', query: selectedPatient ? { patient: String(selectedPatient.id) } : {} }"
+          :to="{ name: 'clinic-treatment-history', query: patientLinkQuery }"
           class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-50"
         >
           <BookOpen class="size-4" aria-hidden="true" />
