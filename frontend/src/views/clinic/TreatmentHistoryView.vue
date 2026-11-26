@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -8,17 +9,23 @@ import TabList from 'primevue/tablist'
 import Tab from 'primevue/tab'
 import TabPanels from 'primevue/tabpanels'
 import TabPanel from 'primevue/tabpanel'
-import { BookOpen, CreditCard, Eye, ShieldCheck } from 'lucide-vue-next'
+import { BookOpen, CreditCard } from 'lucide-vue-next'
 import { API_BASE_URL } from '@/api/api'
 import { recordsApi, type PatientLedgerSummary, type PaymentResponse, type TreatmentRecordResponse } from '@/api/record'
 import RecordPaymentDialog from '@/components/RecordPaymentDialog.vue'
+import TreatmentRecordDetails from '@/components/TreatmentRecordDetails.vue'
 import { useClinicPatientSelection } from '@/composables/useClinicPatientSelection'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients } = useClinicPatientSelection()
 const ledger = ref<PatientLedgerSummary | null>(null)
 const activeTab = ref('history')
+const recordViews = ['Cards', 'Table'] as const
+const recordView = computed(() => route.query.view === 'table' ? 'Table' : 'Cards')
+const expandedTreatmentId = ref<number | null>(null)
 const loadingHistory = ref(false)
 const historyError = ref('')
 const paymentTarget = ref<TreatmentRecordResponse | null>(null)
@@ -39,6 +46,21 @@ const balanceRecords = computed(() => patientTreatments.value
   .filter((record) => Number(record.balance) > 0 || Number(record.down_payment_amount ?? 0) > 0)
   .sort((first, second) => downPaymentDue(second) - downPaymentDue(first)),
 )
+const showBalanceActions = computed(() => authStore.isDoctor || authStore.isSecretary)
+
+function setRecordView(view: typeof recordViews[number]) {
+  if (recordView.value === view) return
+  expandedTreatmentId.value = null
+  void router.replace({ query: { ...route.query, view: view === 'Table' ? 'table' : undefined } })
+}
+
+function hasRecordDetails(record: TreatmentRecordResponse) {
+  return Boolean(record.notes || record.payments.length || record.signature_url)
+}
+
+function canRecordPayment(record: TreatmentRecordResponse) {
+  return authStore.isSecretary && Number(record.balance) > 0
+}
 
 function formatCurrency(value: number | string) {
   return currency.format(Number(value))
@@ -140,6 +162,7 @@ watch(selectedPatient, () => {
   ledger.value = null
   loadingHistory.value = false
   historyError.value = ''
+  expandedTreatmentId.value = null
   paymentTarget.value = null
   paymentStatus.value = ''
   paymentError.value = ''
@@ -198,10 +221,25 @@ onBeforeUnmount(() => {
       <p v-if="paymentStatus" role="status" class="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{{ paymentStatus }}</p>
       <p v-if="paymentError" role="alert" class="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{{ paymentError }}</p>
       <Tabs v-model:value="activeTab" lazy scrollable>
-        <TabList>
-          <Tab value="history">Treatment History</Tab>
-          <Tab value="balance">Down Payments &amp; Balances</Tab>
-        </TabList>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <TabList class="min-w-0 sm:flex-1">
+            <Tab value="history">Treatment History</Tab>
+            <Tab value="balance">Down Payments &amp; Balances</Tab>
+          </TabList>
+          <div role="group" aria-label="Record view" class="inline-flex self-end rounded-lg border border-slate-200 bg-white p-0.5 sm:self-auto">
+            <button
+              v-for="view in recordViews"
+              :key="view"
+              type="button"
+              :aria-pressed="recordView === view"
+              class="rounded-md px-3 py-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-teal-700"
+              :class="recordView === view ? 'bg-teal-50 text-teal-800' : 'text-slate-600 hover:bg-slate-50'"
+              @click="setRecordView(view)"
+            >
+              {{ view }}
+            </button>
+          </div>
+        </div>
         <TabPanels class="bg-transparent px-0 pb-0">
           <TabPanel value="history">
             <div v-if="ledger" class="app-panel p-6 space-y-4">
@@ -221,6 +259,59 @@ onBeforeUnmount(() => {
               <div v-if="patientTreatments.length === 0" class="py-12 text-center text-xs text-slate-400 space-y-2">
                 <BookOpen class="w-6 h-6 mx-auto text-slate-300" />
                 <p>No prior treatment records logged for this patient.</p>
+              </div>
+
+              <div v-else-if="recordView === 'Table'" tabindex="0" role="region" aria-label="Treatment records table"
+                class="max-h-96 overflow-auto rounded-lg border border-slate-200 focus-visible:outline-2 focus-visible:outline-teal-700">
+                <table aria-label="Treatment records" class="w-full min-w-[48rem] text-left text-sm">
+                  <thead class="sticky top-0 z-10 bg-slate-50 text-xs text-slate-700 shadow-xs">
+                    <tr>
+                      <th scope="col" class="px-3 py-2">Procedure</th>
+                      <th scope="col" class="px-3 py-2">Date</th>
+                      <th scope="col" class="px-3 py-2">Doctor</th>
+                      <th scope="col" class="px-3 py-2 text-right">Fee</th>
+                      <th scope="col" class="px-3 py-2 text-right">Paid</th>
+                      <th scope="col" class="px-3 py-2 text-right">Remaining</th>
+                      <th scope="col" class="px-3 py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-200">
+                    <template v-for="rec in patientTreatments" :key="rec.id">
+                      <tr>
+                        <th scope="row" class="px-3 py-2 text-slate-900">
+                          {{ rec.treatment_name }}
+                          <span v-if="rec.tooth_number" class="block text-xs font-normal text-slate-600">Tooth #{{ rec.tooth_number }}</span>
+                        </th>
+                        <td class="px-3 py-2 whitespace-nowrap text-slate-600">{{ formatDate(rec.date) }}</td>
+                        <td class="px-3 py-2 text-slate-600">{{ rec.doctor_name || '—' }}</td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">{{ formatCurrency(rec.value_of_work) }}</td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums text-emerald-700">{{ formatCurrency(rec.total_paid) }}</td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">{{ formatCurrency(rec.balance) }}</td>
+                        <td class="px-3 py-2">
+                          <div v-if="hasRecordDetails(rec) || canRecordPayment(rec)" class="flex flex-wrap items-center gap-1">
+                            <Button v-if="hasRecordDetails(rec)" type="button" label="Details" size="small" text
+                              :aria-label="`Details for ${rec.treatment_name}`" :aria-expanded="expandedTreatmentId === rec.id"
+                              @click="expandedTreatmentId = expandedTreatmentId === rec.id ? null : rec.id" />
+                            <Button v-if="canRecordPayment(rec)" type="button" label="Record Payment" size="small" @click="openPayment(rec)" />
+                          </div>
+                          <span v-else class="text-slate-600">—</span>
+                        </td>
+                      </tr>
+                      <tr v-if="expandedTreatmentId === rec.id && hasRecordDetails(rec)">
+                        <td colspan="7" class="bg-slate-50 px-3 py-3">
+                          <TreatmentRecordDetails
+                            :record="rec"
+                            :loading-consent="isLoadingConsent"
+                            :format-date="formatDate"
+                            :format-currency="formatCurrency"
+                            @view-payment-consent="viewPaymentConsent"
+                            @view-treatment-signature="viewTreatmentSignature"
+                          />
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
               </div>
 
               <div v-else class="space-y-3">
@@ -266,11 +357,7 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
 
-                  <div v-if="rec.notes" class="text-slate-600 bg-white p-2 rounded-lg border border-slate-200/60">
-                    <span class="font-semibold text-slate-700">Notes:</span> {{ rec.notes }}
-                  </div>
-
-                  <div v-if="authStore.isSecretary && Number(rec.balance) > 0" class="flex flex-wrap items-center gap-2">
+                  <div v-if="canRecordPayment(rec)" class="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       class="app-primary-action inline-flex items-center gap-2 rounded-lg px-3 py-2 font-semibold"
@@ -281,34 +368,15 @@ onBeforeUnmount(() => {
                     </button>
                   </div>
 
-                  <div v-if="rec.payments.length" class="space-y-2 border-t border-slate-200 pt-3">
-                    <p class="font-semibold text-slate-800">Installment payments</p>
-                    <ul class="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
-                      <li v-for="payment in rec.payments" :key="payment.id" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                        <p class="text-slate-600">{{ formatDate(payment.payment_date) }} &middot; {{ payment.method }}<span v-if="payment.receipt_no"> &middot; {{ payment.receipt_no }}</span></p>
-                        <div class="flex items-center gap-2">
-                          <span class="font-semibold text-slate-800">{{ formatCurrency(payment.amount) }}</span>
-                          <Button v-if="payment.has_consent" type="button" label="View signature" size="small" text :disabled="isLoadingConsent" @click="viewPaymentConsent(payment.id)" />
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div v-if="rec.signature_url" class="flex items-center justify-between pt-1 text-[11px] text-slate-500">
-                    <span class="flex items-center gap-1 text-emerald-700 font-medium">
-                      <ShieldCheck class="w-3.5 h-3.5" />
-                      Patient consent signature authenticated
-                    </span>
-
-                    <button
-                      type="button"
-                      @click="viewTreatmentSignature(rec.signature_url)"
-                      class="text-teal-600 font-semibold hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <Eye class="w-3.5 h-3.5" />
-                      View Signature
-                    </button>
-                  </div>
+                  <TreatmentRecordDetails
+                    v-if="hasRecordDetails(rec)"
+                    :record="rec"
+                    :loading-consent="isLoadingConsent"
+                    :format-date="formatDate"
+                    :format-currency="formatCurrency"
+                    @view-payment-consent="viewPaymentConsent"
+                    @view-treatment-signature="viewTreatmentSignature"
+                  />
                 </div>
               </div>
             </div>
@@ -322,49 +390,92 @@ onBeforeUnmount(() => {
               <span class="text-sm text-slate-600">Total paid: {{ formatCurrency(ledger.total_amount_paid) }}</span>
             </section>
             <p v-if="!balanceRecords.length" class="app-panel p-4 text-sm text-slate-600">No outstanding treatment charges or down payment plans.</p>
-            <article v-for="record in balanceRecords" :key="record.id" class="app-panel space-y-4 p-5">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 class="font-bold text-slate-900">{{ record.treatment_name }}</h3>
-                  <p class="text-xs text-slate-600">{{ formatDate(record.date) }}</p>
+            <div v-else-if="recordView === 'Table'" tabindex="0" role="region" aria-label="Down payment and balance table"
+              class="app-panel max-h-96 overflow-auto focus-visible:outline-2 focus-visible:outline-teal-700">
+              <table aria-label="Down payments and balances" class="w-full min-w-[53rem] text-left text-sm">
+                <thead class="sticky top-0 z-10 bg-slate-50 text-xs text-slate-700 shadow-xs">
+                  <tr>
+                    <th scope="col" class="px-3 py-2">Procedure</th>
+                    <th scope="col" class="px-3 py-2">Date</th>
+                    <th scope="col" class="px-3 py-2 text-right">Treatment charge</th>
+                    <th scope="col" class="px-3 py-2 text-right">Paid to date</th>
+                    <th scope="col" class="px-3 py-2 text-right">Required down payment</th>
+                    <th scope="col" class="px-3 py-2 text-right">Down payment still due</th>
+                    <th scope="col" class="px-3 py-2 text-right">Remaining balance</th>
+                    <th v-if="showBalanceActions" scope="col" class="px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                  <tr v-for="record in balanceRecords" :key="record.id">
+                    <th scope="row" class="px-3 py-2 text-slate-900">{{ record.treatment_name }}</th>
+                    <td class="px-3 py-2 whitespace-nowrap text-slate-600">{{ formatDate(record.date) }}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">{{ formatCurrency(record.value_of_work) }}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">{{ formatCurrency(record.total_paid) }}</td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                      {{ Number(record.down_payment_amount) > 0 ? formatCurrency(record.down_payment_amount ?? 0) : '—' }}
+                    </td>
+                    <td class="px-3 py-2 text-right whitespace-nowrap tabular-nums">
+                      <span v-if="Number(record.down_payment_amount) > 0" :class="downPaymentDue(record) ? 'text-amber-800' : 'text-emerald-800'">
+                        {{ downPaymentDue(record) ? formatCurrency(downPaymentDue(record)) : 'Covered' }}
+                      </span>
+                      <span v-else>—</span>
+                    </td>
+                    <td class="px-3 py-2 text-right font-semibold whitespace-nowrap tabular-nums text-teal-900">{{ formatCurrency(record.balance) }}</td>
+                    <td v-if="showBalanceActions" class="px-3 py-2">
+                      <Button v-if="authStore.isDoctor" type="button" size="small" outlined
+                        :label="Number(record.down_payment_amount) > 0 ? 'Edit down payment' : 'Set down payment'" @click="editTerms(record)" />
+                      <Button v-else-if="canRecordPayment(record)" type="button" label="Record Payment" size="small" @click="openPayment(record)" />
+                      <span v-else class="text-slate-600">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <template v-else>
+              <article v-for="record in balanceRecords" :key="record.id" class="app-panel space-y-4 p-5">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 class="font-bold text-slate-900">{{ record.treatment_name }}</h3>
+                    <p class="text-xs text-slate-600">{{ formatDate(record.date) }}</p>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <Button
+                      v-if="authStore.isDoctor"
+                      type="button"
+                      :label="Number(record.down_payment_amount) > 0 ? 'Edit down payment' : 'Set down payment'"
+                      size="small"
+                      outlined
+                      @click="editTerms(record)"
+                    />
+                    <Button v-if="canRecordPayment(record)" type="button" label="Record Payment" size="small" @click="openPayment(record)" />
+                  </div>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  <Button
-                    v-if="authStore.isDoctor"
-                    type="button"
-                    :label="Number(record.down_payment_amount) > 0 ? 'Edit down payment' : 'Set down payment'"
-                    size="small"
-                    outlined
-                    @click="editTerms(record)"
-                  />
-                  <Button v-if="authStore.isSecretary && Number(record.balance) > 0" type="button" label="Record Payment" size="small" @click="openPayment(record)" />
-                </div>
-              </div>
-              <dl class="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-3">
-                <div>
-                  <dt class="text-slate-600">Treatment charge</dt>
-                  <dd class="font-semibold text-slate-900">{{ formatCurrency(record.value_of_work) }}</dd>
-                </div>
-                <div>
-                  <dt class="text-slate-600">Paid to date</dt>
-                  <dd class="font-semibold text-slate-900">{{ formatCurrency(record.total_paid) }}</dd>
-                </div>
-                <div>
-                  <dt class="text-slate-600">Remaining balance</dt>
-                  <dd class="font-semibold text-teal-900">{{ formatCurrency(record.balance) }}</dd>
-                </div>
-                <div v-if="Number(record.down_payment_amount) > 0">
-                  <dt class="text-slate-600">Required down payment</dt>
-                  <dd class="font-semibold text-slate-900">{{ formatCurrency(record.down_payment_amount ?? 0) }}</dd>
-                </div>
-                <div v-if="Number(record.down_payment_amount) > 0">
-                  <dt class="text-slate-600">Down payment still due</dt>
-                  <dd class="font-semibold" :class="downPaymentDue(record) ? 'text-amber-800' : 'text-emerald-800'">
-                    {{ downPaymentDue(record) ? formatCurrency(downPaymentDue(record)) : 'Covered' }}
-                  </dd>
-                </div>
-              </dl>
-            </article>
+                <dl class="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <dt class="text-slate-600">Treatment charge</dt>
+                    <dd class="font-semibold text-slate-900">{{ formatCurrency(record.value_of_work) }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-slate-600">Paid to date</dt>
+                    <dd class="font-semibold text-slate-900">{{ formatCurrency(record.total_paid) }}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-slate-600">Remaining balance</dt>
+                    <dd class="font-semibold text-teal-900">{{ formatCurrency(record.balance) }}</dd>
+                  </div>
+                  <div v-if="Number(record.down_payment_amount) > 0">
+                    <dt class="text-slate-600">Required down payment</dt>
+                    <dd class="font-semibold text-slate-900">{{ formatCurrency(record.down_payment_amount ?? 0) }}</dd>
+                  </div>
+                  <div v-if="Number(record.down_payment_amount) > 0">
+                    <dt class="text-slate-600">Down payment still due</dt>
+                    <dd class="font-semibold" :class="downPaymentDue(record) ? 'text-amber-800' : 'text-emerald-800'">
+                      {{ downPaymentDue(record) ? formatCurrency(downPaymentDue(record)) : 'Covered' }}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            </template>
           </TabPanel>
         </TabPanels>
       </Tabs>
