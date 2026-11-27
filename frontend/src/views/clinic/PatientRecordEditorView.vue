@@ -35,6 +35,8 @@ const router = useRouter()
 
 const { patients, selectedPatient, selectPatient, loadingPatients, patientLoadError, loadPatients, patientLinkQuery } = useClinicPatientSelection()
 const patientSearchQuery = ref('')
+const patientStageFilter = ref('')
+const treatmentStages = ['consultation', 'scanning', 'planning', 'active_treatment', 'retention', 'completed'] as const
 const patientViews = ['Cards', 'Table'] as const
 const patientView = computed(() => route.query.view === 'table' ? 'Table' : 'Cards')
 const patientSortColumns = [{ key: 'id', label: 'Patient ID' }, { key: 'name', label: 'Name' }] as const
@@ -115,12 +117,25 @@ watch(selectedPatient, (patient) => {
 
 const filteredPatients = computed(() => {
   const query = patientSearchQuery.value.trim().toLowerCase()
-  return patients.value.filter((patient) =>
-    patientName(patient).toLowerCase().includes(query)
-    || (patient.user?.email ?? '').toLowerCase().includes(query)
-    || String(patient.id).includes(query),
-  )
+  const stage = patientStageFilter.value
+  return patients.value.filter((patient) => {
+    const matchesStage = !stage || patient.treatment_stage === stage
+    const matchesSearch = patientName(patient).toLowerCase().includes(query)
+      || (patient.user?.email ?? '').toLowerCase().includes(query)
+      || String(patient.id).includes(query)
+    return matchesStage && matchesSearch
+  })
 })
+
+const hiddenSelectedPatient = computed(() => {
+  const patient = selectedPatient.value
+  return patient && !filteredPatients.value.some(({ id }) => id === patient.id) ? patient : null
+})
+
+function clearPatientFilters() {
+  patientSearchQuery.value = ''
+  patientStageFilter.value = ''
+}
 
 const sortedPatients = computed(() => {
   const sort = patientSort.value
@@ -236,37 +251,63 @@ async function handleSaveTreatmentRecord() {
     </div>
 
     <div class="app-panel p-5 space-y-4">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-2">
           <User class="w-5 h-5 text-teal-600" />
           <h2 class="text-sm font-extrabold text-slate-900">Patient Selection & Profile</h2>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-          <div role="group" aria-label="Patient list view" class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-            <button
-              v-for="view in patientViews"
-              :key="view"
-              type="button"
-              :aria-pressed="patientView === view"
-              class="rounded-md px-3 py-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-teal-700"
-              :class="patientView === view ? 'bg-teal-50 text-teal-800 shadow-xs' : 'text-slate-600 hover:bg-white'"
-              @click="setPatientView(view)"
-            >
-              {{ view }}
-            </button>
-          </div>
-          <div class="relative w-full sm:w-64">
-            <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
-            <input
-              v-model="patientSearchQuery"
-              type="text"
-              aria-label="Search patients"
-              placeholder="Search by name, email, or ID…"
-              class="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
-            />
-          </div>
+        <div role="group" aria-label="Patient list view" class="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <button
+            v-for="view in patientViews"
+            :key="view"
+            type="button"
+            :aria-pressed="patientView === view"
+            class="rounded-md px-3 py-1.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-teal-700"
+            :class="patientView === view ? 'bg-teal-50 text-teal-800 shadow-xs' : 'text-slate-600 hover:bg-white'"
+            @click="setPatientView(view)"
+          >
+            {{ view }}
+          </button>
         </div>
+      </div>
+
+      <div class="flex flex-wrap items-end gap-2">
+        <div class="relative w-full sm:w-64">
+          <Search class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
+          <input
+            v-model="patientSearchQuery"
+            type="text"
+            aria-label="Search patients"
+            placeholder="Search by name, email, or ID…"
+            class="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs text-slate-900 transition focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
+        </div>
+        <label class="flex flex-col gap-1 text-xs font-semibold text-slate-700">
+          Treatment Stage
+          <select
+            v-model="patientStageFilter"
+            class="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 font-normal text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+          >
+            <option value="">All stages</option>
+            <option v-for="stage in treatmentStages" :key="stage" :value="stage">{{ formatTreatmentStage(stage) }}</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          :disabled="!patientSearchQuery && !patientStageFilter"
+          class="h-9 rounded-xl px-3 text-xs font-semibold text-teal-800 hover:bg-teal-50 focus-visible:outline-2 focus-visible:outline-teal-700 disabled:text-slate-500 disabled:hover:bg-transparent"
+          @click="clearPatientFilters"
+        >
+          Clear filters
+        </button>
+      </div>
+
+      <div v-if="!loadingPatients && !patientLoadError" role="status" class="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-slate-600">
+        <p>{{ filteredPatients.length }} of {{ patients.length }} {{ patients.length === 1 ? 'patient' : 'patients' }}</p>
+        <p v-if="hiddenSelectedPatient" class="wrap-anywhere">
+          Selected patient <strong class="text-slate-900">{{ patientName(hiddenSelectedPatient) }} (ID #{{ hiddenSelectedPatient.id }})</strong> is hidden by filters.
+        </p>
       </div>
 
       <p v-if="loadingPatients" role="status" class="text-sm text-slate-600">Loading patients...</p>
@@ -275,7 +316,7 @@ async function handleSaveTreatmentRecord() {
         <button type="button" class="underline" @click="loadPatients">Retry</button>
       </div>
       <p v-else-if="!filteredPatients.length" role="status" class="text-sm text-slate-600">
-        {{ patientSearchQuery.trim() ? 'No matching patients.' : 'No patients available.' }}
+        {{ patients.length ? 'No patients match your filters.' : 'No patients available.' }}
       </p>
       <div
         v-else-if="patientView === 'Table'"
@@ -351,7 +392,7 @@ async function handleSaveTreatmentRecord() {
               {{ patientName(pat) }}
             </p>
             <p class="text-[10px] text-slate-500 truncate">
-              ID #{{ pat.id }} &bull; {{ pat.treatment_stage || 'Consultation' }}
+              ID #{{ pat.id }} &bull; {{ formatTreatmentStage(pat.treatment_stage) }}
             </p>
           </div>
         </div>
