@@ -6,6 +6,7 @@ import { useRecordStore } from '@/stores/record'
 import { useDoctorStore } from '@/stores/doctor'
 import { useAuthStore } from '@/stores/auth'
 import { useClinicPatientSelection } from '@/composables/useClinicPatientSelection'
+import PatientRowActions from '@/components/PatientRowActions.vue'
 import ToothMatrix from '@/components/ToothMatrix.vue'
 import {
   FileText,
@@ -325,7 +326,7 @@ async function handleSaveTreatmentRecord() {
         tabindex="0"
         class="max-h-64 overflow-auto rounded-lg border border-slate-200 focus-visible:outline-2 focus-visible:outline-teal-700"
       >
-        <table aria-label="Patients" class="w-full min-w-[38rem] table-fixed text-left text-sm">
+        <table aria-label="Patients" class="w-full min-w-[44rem] table-fixed text-left text-sm">
           <thead class="sticky top-0 z-10 bg-slate-50 text-xs text-slate-600 shadow-xs">
             <tr>
               <th
@@ -351,6 +352,7 @@ async function handleSaveTreatmentRecord() {
               </th>
               <th scope="col" class="w-36 px-3 py-2 whitespace-nowrap">Treatment Stage</th>
               <th scope="col" class="px-3 py-2">Email</th>
+              <th scope="col" class="w-20 px-3 py-2 text-center">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-200">
@@ -368,6 +370,9 @@ async function handleSaveTreatmentRecord() {
               </td>
               <td class="px-3 py-2 text-slate-600">{{ formatTreatmentStage(pat.treatment_stage) }}</td>
               <td class="px-3 py-2 wrap-anywhere text-slate-600">{{ pat.user?.email || '—' }}</td>
+              <td class="px-3 py-2 text-center">
+                <PatientRowActions :patient="pat" :patient-name="patientName(pat)" />
+              </td>
             </tr>
           </tbody>
         </table>

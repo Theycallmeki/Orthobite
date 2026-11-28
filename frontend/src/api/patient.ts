@@ -10,6 +10,7 @@ export interface PatientResponse {
   phone?: string | null
   address?: string | null
   treatment_stage?: string
+  assigned_doctor_id?: number | null
   bite_type?: string
   notes?: string | null
   user?: UserResponse
