@@ -39,23 +39,62 @@ const patientSearchQuery = ref('')
 const patientStageFilter = ref('')
 const treatmentStages = ['consultation', 'scanning', 'planning', 'active_treatment', 'retention', 'completed'] as const
 const patientViews = ['Cards', 'Table'] as const
-const patientView = computed(() => route.query.view === 'table' ? 'Table' : 'Cards')
+type PatientView = typeof patientViews[number]
 const patientSortColumns = [{ key: 'id', label: 'Patient ID' }, { key: 'name', label: 'Name' }] as const
 type PatientSortColumn = typeof patientSortColumns[number]['key']
-const patientSort = ref<{ column: PatientSortColumn; direction: 'ascending' | 'descending' }>()
+type PatientSort = { column: PatientSortColumn; direction: 'ascending' | 'descending' }
+type PatientPreferences = { view: PatientView; sort?: PatientSort }
+const patientPreferences = ref<PatientPreferences>({ view: 'Cards' })
+const preferenceKey = computed(() => authStore.user && `orthobite:patient-record-editor:${authStore.user.id}`)
+const patientView = computed(() => {
+  if (route.query.view === 'cards') return 'Cards'
+  if (route.query.view === 'table') return 'Table'
+  return patientPreferences.value.view
+})
+const patientSort = computed(() => patientPreferences.value.sort)
 const patientNameCollator = new Intl.Collator('en-PH', { sensitivity: 'base', numeric: true })
 
-function setPatientView(view: typeof patientViews[number]) {
+watch(preferenceKey, (key) => {
+  patientPreferences.value = { view: 'Cards' }
+  if (!key) return
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) ?? 'null') as Partial<PatientPreferences> | null
+    if (saved?.view === 'Cards' || saved?.view === 'Table') {
+      patientPreferences.value.view = saved.view
+    }
+    const sort = saved?.sort
+    if (sort && patientSortColumns.some(({ key }) => key === sort.column)
+      && (sort.direction === 'ascending' || sort.direction === 'descending')) {
+      patientPreferences.value.sort = { column: sort.column, direction: sort.direction }
+    }
+  } catch {
+    // Use defaults when storage is unavailable or the saved JSON is invalid.
+  }
+}, { immediate: true })
+
+function savePatientPreferences() {
+  if (!preferenceKey.value) return
+  try {
+    localStorage.setItem(preferenceKey.value, JSON.stringify(patientPreferences.value))
+  } catch {
+    // The current view and sort remain usable for this visit.
+  }
+}
+
+function setPatientView(view: PatientView) {
   if (view === patientView.value) return
-  void router.replace({ query: { ...route.query, view: view === 'Table' ? 'table' : undefined } })
+  patientPreferences.value.view = view
+  savePatientPreferences()
+  void router.replace({ query: { ...route.query, view: view === 'Table' ? 'table' : 'cards' } })
 }
 
 function togglePatientSort(column: PatientSortColumn) {
   const current = patientSort.value
-  patientSort.value = {
+  patientPreferences.value.sort = {
     column,
     direction: current?.column === column && current.direction === 'ascending' ? 'descending' : 'ascending',
   }
+  savePatientPreferences()
 }
 
 function patientName(patient: PatientResponse) {
@@ -335,7 +374,7 @@ async function handleSaveTreatmentRecord() {
                 scope="col"
                 :aria-sort="patientSort?.column === column.key ? patientSort.direction : undefined"
                 class="px-3 py-2"
-                :class="column.key === 'id' ? 'w-28' : 'w-[30%]'"
+                :class="column.key === 'id' ? 'w-28' : 'w-32 bg-slate-50 sm:w-40 lg:w-[30%] max-lg:sticky max-lg:left-0 max-lg:z-10'"
               >
                 <button
                   type="button"
@@ -356,9 +395,12 @@ async function handleSaveTreatmentRecord() {
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-200">
-            <tr v-for="pat in sortedPatients" :key="pat.id" :class="selectedPatient?.id === pat.id ? 'bg-teal-50' : 'hover:bg-slate-50'">
+            <tr v-for="pat in sortedPatients" :key="pat.id" class="group" :class="selectedPatient?.id === pat.id ? 'bg-teal-50' : 'hover:bg-slate-50'">
               <td class="px-3 py-2 tabular-nums text-slate-700">{{ pat.id }}</td>
-              <td class="px-3 py-2">
+              <td
+                class="px-3 py-2 max-lg:sticky max-lg:left-0 max-lg:z-1"
+                :class="selectedPatient?.id === pat.id ? 'max-lg:bg-teal-50' : 'max-lg:bg-white max-lg:group-hover:bg-slate-50'"
+              >
                 <button
                   type="button"
                   :aria-pressed="selectedPatient?.id === pat.id"

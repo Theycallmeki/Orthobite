@@ -20,6 +20,12 @@ const items = computed(() => {
   }
   return actions
 })
+
+function toggleActions(event: MouseEvent) {
+  const trigger = event.currentTarget
+  // Let the table finish dispatching scroll events from bringing the trigger into view.
+  requestAnimationFrame(() => menu.value?.toggle(event, trigger))
+}
 </script>
 
 <template>
@@ -31,7 +37,7 @@ const items = computed(() => {
     aria-haspopup="menu"
     :aria-controls="menuId"
     :aria-expanded="open"
-    @click="menu?.toggle($event)"
+    @click="toggleActions"
   >
     <Ellipsis class="size-5" aria-hidden="true" />
   </button>
